@@ -501,45 +501,26 @@ static void _calculate_trapezoid(mpBuf_t *bf)
      *********************************
      *********************************/
 
-	// F case: Block is too short to execute. 
-	// Force block into a single segment body with limited velocities
+    // B" case: Block is short - fits into a single body segment
+    // F case: Block is too short - run time < minimum segment time
 
-	// if length < segment time * average velocity
-	float average_velocity = (bf->entry_velocity + bf->cruise_velocity) / 2;
-	if (bf->length < (MIN_SEGMENT_TIME_PLUS_MARGIN * average_velocity)) {
-		bf->entry_velocity = bf->length / MIN_SEGMENT_TIME_PLUS_MARGIN;
-		bf->cruise_velocity = bf->entry_velocity;
-		bf->exit_velocity = bf->entry_velocity;
-		bf->body_length = bf->length;
-		bf->head_length = 0;
-		bf->tail_length = 0;
-        // We have invalidated jerk, but don't use it...
-		return;
-	}
+    // Force block into a single segment body with limited velocities
+    // Accept the entry velocity, limit the cruise, and go for the best exit velocity
+    // you can get given the delta_vmax (maximum velocity slew) supportable.
 
-	// B" case: Short line, body only. See if the block fits into a single segment
-
-	if (bf->length <= (NOM_SEGMENT_TIME * average_velocity)) {
-		bf->entry_velocity = bf->length / NOM_SEGMENT_TIME;
-		bf->cruise_velocity = bf->entry_velocity;
-		bf->exit_velocity = bf->entry_velocity;
-		bf->body_length = bf->length;
-		bf->head_length = 0;
-		bf->tail_length = 0;
-        // We have invalidated jerk, but don't use it...
-		return;
-	}
-
-	// B case:  Velocities all match (or close enough)
-	//			This occurs frequently in normal gcode files with lots of short lines
-
-//	if (((bf->cruise_velocity - bf->entry_velocity) < TRAPEZOID_VELOCITY_TOLERANCE) && 
-//		((bf->cruise_velocity - bf->exit_velocity) < TRAPEZOID_VELOCITY_TOLERANCE)) { 
-//		bf->body_length = bf->length;
-//		bf->head_length = 0;
-//		bf->tail_length = 0;
-//		return;
-//	}
+    float naiive_move_time = bf->length / bf->cruise_velocity;
+    if (naiive_move_time <= NOM_SEGMENT_TIME) {                    // NOM_SEGMENT_TIME > B" case > MIN_SEGMENT_TIME_PLUS_MARGIN
+        if (naiive_move_time < MIN_SEGMENT_TIME_PLUS_MARGIN) {    // MIN_SEGMENT_TIME_PLUS_MARGIN > F case
+            naiive_move_time = MIN_SEGMENT_TIME_PLUS_MARGIN;
+        }
+        bf->cruise_velocity = bf->length / naiive_move_time;
+        bf->exit_velocity = max(0.0, min(bf->cruise_velocity, (bf->entry_velocity - bf->delta_vmax)));
+        bf->body_length = bf->length;
+        bf->head_length = 0;
+        bf->tail_length = 0;
+        // We are violating the jerk value but since it's a single segment move we don't use it.
+        return;
+    }
 
 	// Head-only and tail-only short-line cases
 	//	 H" and T" degraded-fit cases
@@ -570,8 +551,8 @@ static void _calculate_trapezoid(mpBuf_t *bf)
                      *   by the ΔV (velocity change) on one side and T (the time of the move) on the bottom:
                      *   
                      *        |\      Area of the triangle = L (distance traveled)
-                     *     ΔV | \                  (V*T)/2 = L  →  VT = 2L  →  V = 2L/T
-                     *         --
+                     *     ΔV | \                  (ΔV*T)/2 = L  →  ΔV*T = 2L  →  ΔV = 2L/T
+                     *         --				   (Vt-Vi) = 2L/T → 2(L/T)+Vi = Vt
                      *         T
                      *
                      *   Normally we are bounded by the jerk value, but as long as we only *lower* ΔV while not
@@ -579,12 +560,16 @@ static void _calculate_trapezoid(mpBuf_t *bf)
                      *   while making the move take more time, which is what we want.
                      *
                      *   Additionally, since we want the time to be twice MIN_SEGMENT_TIME_PLUS_MARGIN, we will
-                     *   replace T = (t*2), to get (V*(t*2))/2 = L  →  Vt = L  →  V = L/t
+                     *   replace T = (t*2), to get 2(L/(t*2))+Vi = Vt  →  L/t+Vi = Vt
                      */
 
-//                    bf->entry_velocity = min(bf->exit_velocity + (bf->length / MIN_SEGMENT_TIME_PLUS_MARGIN),
-//                                             _get_target_velocity(bf->exit_velocity, bf->length, bf));
-                    bf->exit_velocity = max(0.0, bf->entry_velocity - (bf->length / MIN_SEGMENT_TIME_PLUS_MARGIN));
+                    bf->exit_velocity = (bf->length / MIN_SEGMENT_TIME_PLUS_MARGIN) + bf->entry_velocity;
+                    if (bf->exit_velocity < 0) {
+                        // exit_velocity is negative, we want to *add* abs(exit_velocity) to entry_velocity.
+                        // So we subtract the negative exit_velocity from entry_velocity.
+                        bf->entry_velocity -= bf->exit_velocity;
+						bf->exit_velocity = 0;
+                    }
                 }
                 bf->cruise_velocity = bf->entry_velocity;
                 bf->tail_length = bf->length;

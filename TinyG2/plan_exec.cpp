@@ -252,7 +252,7 @@ stat_t mp_exec_aline(mpBuf_t *bf)
 /* Forward difference math explained:
  *
  * We are using a quintic (fifth-degree) Bézier polynomial for the velocity curve. This gives us
- * a "linear pop" (pop being the fifth derivative of position: velocity - 1st, jerk - 2nd, snap - 3rd,
+ * a "linear pop" (pop being the fifth derivative of velocity: acceleration - 1st, jerk - 2nd, snap - 3rd,
  * crackle - 4th, pop - 5th) velocity curve.
  *
  * The bezier curve takes the form:
