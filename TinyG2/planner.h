@@ -98,6 +98,7 @@ enum sectionState {
 #define MIN_SEGMENT_TIME 		(MIN_SEGMENT_USEC / MICROSECONDS_PER_MINUTE)
 #define MIN_ARC_SEGMENT_TIME 	(MIN_ARC_SEGMENT_USEC / MICROSECONDS_PER_MINUTE)
 #define MIN_TIME_MOVE  			MIN_SEGMENT_TIME 	// minimum time a move can be is one segment
+#define MIN_BLOCK_TIME			MIN_SEGMENT_TIME	// factor for minimum size Gcode block to process
 
 #define MIN_SEGMENT_TIME_PLUS_MARGIN ((MIN_SEGMENT_USEC+1) / MICROSECONDS_PER_MINUTE)
 
@@ -324,6 +325,13 @@ float* mp_get_planner_position_vector();
 void mp_init_runtime(void);
 stat_t mp_exec_move(void);
 stat_t mp_exec_aline(mpBuf_t *bf);
+
+
+// plan_zoid.c functions
+void mp_calculate_trapezoid(mpBuf_t *bf);
+float mp_get_target_length(const float Vi, const float Vt, const mpBuf_t *bf);
+float mp_get_target_velocity(const float Vi, const float L, const mpBuf_t *bf);
+float mp_get_target_velocity_given_time(const float Vi, const float L, const float T, const mpBuf_t *bf);
 
 
 #ifdef __DEBUG

@@ -14,6 +14,7 @@
 		D4021FA5175E37BF0099576C /* syscalls_sam3.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D4021FA1175E37BF0099576C /* syscalls_sam3.cpp */; };
 		D4021FA7175E388B0099576C /* hooks.c in Sources */ = {isa = PBXBuildFile; fileRef = D4021FA6175E388B0099576C /* hooks.c */; };
 		D41D13F517374B4E00D522D9 /* switch.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D41D13F317374B4E00D522D9 /* switch.cpp */; };
+		D42E85DC19366FA000BC1C1C /* plan_zoid.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D42E85DB19366FA000BC1C1C /* plan_zoid.cpp */; };
 		D43A458B185A4AF600B3C134 /* SamSPI.h in Sources */ = {isa = PBXBuildFile; fileRef = D41FC0631826F29F003D66C2 /* SamSPI.h */; };
 		D43CAF9E187BABDB0042B58F /* SamPins.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D43CAF9C187BABDB0042B58F /* SamPins.cpp */; };
 		D457113017053C3A00EA19A8 /* MotateTimers.h in Sources */ = {isa = PBXBuildFile; fileRef = D45710C91705334000EA19A8 /* MotateTimers.h */; };
@@ -420,6 +421,7 @@
 		D41D14021737528200D522D9 /* SamUSB.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SamUSB.h; sourceTree = "<group>"; };
 		D41FC0621826F21C003D66C2 /* MotateSPI.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MotateSPI.h; sourceTree = "<group>"; };
 		D41FC0631826F29F003D66C2 /* SamSPI.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SamSPI.h; sourceTree = "<group>"; };
+		D42E85DB19366FA000BC1C1C /* plan_zoid.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = plan_zoid.cpp; sourceTree = "<group>"; };
 		D43CAF9C187BABDB0042B58F /* SamPins.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SamPins.cpp; sourceTree = "<group>"; };
 		D4550F5E175536DD006BDBA0 /* MotateUSB.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MotateUSB.h; sourceTree = "<group>"; };
 		D4550F5F175545F5006BDBA0 /* MotateUSBHelpers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MotateUSBHelpers.h; sourceTree = "<group>"; };
@@ -3312,6 +3314,7 @@
 				D48F5A77172CB21100D0E055 /* plan_arc.h */,
 				D4B6579C18B5C1DE00F8616C /* plan_exec.cpp */,
 				D48F5A4E172CB1FA00D0E055 /* plan_line.cpp */,
+				D42E85DB19366FA000BC1C1C /* plan_zoid.cpp */,
 				D48F5A4F172CB1FA00D0E055 /* planner.cpp */,
 				D48F5A79172CB21100D0E055 /* planner.h */,
 				D4B657A518B5C23C00F8616C /* pwm.cpp */,
@@ -7967,6 +7970,7 @@
 				D49EC57317054FDF00F2BF9B /* arm_cfft_radix4_q15.c in Sources */,
 				D49EC57417054FDF00F2BF9B /* arm_cfft_radix4_q31.c in Sources */,
 				D49EC57517054FDF00F2BF9B /* arm_dct4_f32.c in Sources */,
+				D42E85DC19366FA000BC1C1C /* plan_zoid.cpp in Sources */,
 				D49EC57617054FDF00F2BF9B /* arm_dct4_init_f32.c in Sources */,
 				D49EC57717054FDF00F2BF9B /* arm_dct4_init_q15.c in Sources */,
 				D49EC57817054FDF00F2BF9B /* arm_dct4_init_q31.c in Sources */,
