@@ -118,6 +118,10 @@ extern "C"{
  *	  short Gcode blocks are being thrown at you.
  */
 
+/* NOTE2: mp_get_target_velocity is increasingly accurate at higher length moves.
+ *        mp_get_target_velocity should be avoided at known lower-speed/short moves.
+ */
+
 // The minimum lengths are dynamic and depend on the velocity
 // These expressions evaluate to the minimum lengths for the current velocity settings
 // Note: The head and tail lengths are 2 minimum segments, the body is 1 min segment
@@ -127,6 +131,14 @@ extern "C"{
 
 void mp_calculate_trapezoid(mpBuf_t *bf)
 {
+	/* List of guarantees that other code is *supposed* to offer *before* we get to this point:
+	 *
+	 * bf->entry_velocity is low enough that we can
+	 *   a) Decelerate to zero without violating maximum jerk
+	 *   b) Move at least bf->length and take at least MIN_SEGMENT_TIME_PLUS_MARGIN
+	 *
+	 */
+
 	// B" case: Block is short - fits into a single body segment
 	// F case: Block is too short - run time < minimum segment time
 	
@@ -138,8 +150,8 @@ void mp_calculate_trapezoid(mpBuf_t *bf)
 	if (naiive_move_time <= NOM_SEGMENT_TIME) {					// NOM_SEGMENT_TIME > B" case > MIN_SEGMENT_TIME_PLUS_MARGIN
 		if (naiive_move_time < MIN_SEGMENT_TIME_PLUS_MARGIN) {	// MIN_SEGMENT_TIME_PLUS_MARGIN > F case 
 			naiive_move_time = MIN_SEGMENT_TIME_PLUS_MARGIN;
+			bf->cruise_velocity = bf->length / naiive_move_time;
 		}
-		bf->cruise_velocity = bf->length / naiive_move_time;
 		bf->exit_velocity = max(0.0, min(bf->cruise_velocity, (bf->entry_velocity - bf->delta_vmax)));
 		bf->body_length = bf->length;
 		bf->head_length = 0;
@@ -162,15 +174,19 @@ void mp_calculate_trapezoid(mpBuf_t *bf)
 	// Head-only and tail-only short-line cases
 	//	 H" and T" degraded-fit cases
 	//	 H' and T' requested-fit cases where the body residual is less than MIN_BODY_LENGTH
+
+	// Reminder: We already eliminated the cases where we need to have a body-only move.
 	
 	bf->body_length = 0;
-	float minimum_length = mp_get_target_length(bf->entry_velocity, bf->exit_velocity, bf);
-	if (bf->length <= (minimum_length + MIN_BODY_LENGTH)) {	// head-only & tail-only cases
+	if (bf->length <= (MIN_HEAD_LENGTH + MIN_BODY_LENGTH + MIN_TAIL_LENGTH)) {	// head-only & tail-only cases
 
 		if (bf->entry_velocity > bf->exit_velocity)	{		// tail-only cases (short decelerations)
-			if (bf->length < minimum_length) { 				// T" (degraded case)
-				bf->entry_velocity = mp_get_target_velocity(bf->exit_velocity, bf->length, bf);
+
+			// Math note: Vt = (2*L)/T-Vi, and we want T=t*2, thus: Vt = L/t-Vi
+			if (bf->length < MIN_TAIL_LENGTH) { 				// T" (degraded case)
+				bf->exit_velocity = max(0.0, bf->length/MIN_SEGMENT_TIME_PLUS_MARGIN - bf->entry_velocity);
 			}
+
 			bf->cruise_velocity = bf->entry_velocity;
 			bf->tail_length = bf->length;
 			bf->head_length = 0;
@@ -178,9 +194,12 @@ void mp_calculate_trapezoid(mpBuf_t *bf)
 		}
 
 		if (bf->entry_velocity < bf->exit_velocity)	{		// head-only cases (short accelerations)
-			if (bf->length < minimum_length) { 				// H" (degraded case)
-				bf->exit_velocity = mp_get_target_velocity(bf->entry_velocity, bf->length, bf);
+
+			// Math note: Vt = (2*L)/T-Vi, and we want T=t*2, thus: Vt = L/t-Vi
+			if (bf->length < MIN_HEAD_LENGTH) { 				// T" (degraded case)
+				bf->exit_velocity = max(0.0, bf->length/MIN_SEGMENT_TIME_PLUS_MARGIN - bf->entry_velocity);
 			}
+
 			bf->cruise_velocity = bf->exit_velocity;
 			bf->head_length = bf->length;
 			bf->tail_length = 0;
@@ -191,8 +210,8 @@ void mp_calculate_trapezoid(mpBuf_t *bf)
 	// Set head and tail lengths for evaluating the next cases
 	bf->head_length = mp_get_target_length(bf->entry_velocity, bf->cruise_velocity, bf);
 	bf->tail_length = mp_get_target_length(bf->exit_velocity, bf->cruise_velocity, bf);
-	if (bf->head_length < MIN_HEAD_LENGTH) { bf->head_length = 0;}
-	if (bf->tail_length < MIN_TAIL_LENGTH) { bf->tail_length = 0;}
+	if (bf->head_length < MIN_HEAD_LENGTH) { bf->head_length = MIN_HEAD_LENGTH;}
+	if (bf->tail_length < MIN_TAIL_LENGTH) { bf->tail_length = MIN_TAIL_LENGTH;}
 
 	// Rate-limited HT and HT' cases
 	if (bf->length < (bf->head_length + bf->tail_length)) { // it's rate limited
@@ -361,10 +380,10 @@ float mp_get_target_velocity(const float Vi, const float L, const mpBuf_t *bf)
      *  OR
      *
      *      J from L, Vi, and Ve
-     *      J = ((Ve - Vi) (Vi + Ve)²) / L²
+     *      J = ((Ve - Vi) (Vi + Ve)^2 ) / L^2 
      *  Replacing Ve with x, and subtracting the known J:
-     *      0 = ((x - Vi) (Vi + x)²) / L² - J
-     *      Z(x) = ((x - Vi) (Vi + x)²) / L² - J
+     *      0 = ((x - Vi) (Vi + x)^2 ) / L^2  - J
+     *      Z(x) = ((x - Vi) (Vi + x)^2 ) / L^2  - J
      *
      *  L doesn't resolve to the value very quickly (it graphs near-vertical).
      *  So, we'll use J, which resolves in < 10 iterations, often in only two or three
@@ -378,7 +397,7 @@ float mp_get_target_velocity(const float Vi, const float L, const mpBuf_t *bf)
      *  SqrtDeltaOverJ = sqrt((x-Vi) / J)
      *  L'(x) = SqrtDeltaOverJ + (Vi + x) / (2*J) + (Vi + x) / (2*SqrtDeltaJ)
      *
-     *  J'(x) = (2*Vi*x - Vi² + 3*x²) / L²
+     *  J'(x) = (2*Vi*x - Vi^2  + 3*x^2 ) / L^2 
      *
      *
      */
@@ -386,14 +405,14 @@ float mp_get_target_velocity(const float Vi, const float L, const mpBuf_t *bf)
     float L_squared = pow(L,2);
     float Vi_squared = pow(Vi,2);
 
-    float previous_estimate = 0;
-    int8_t i = 10; // Only allow it to iterate 10 times
-    do {
+//    float previous_estimate = 0;
+//    int8_t i = 3; // Only allow it to iterate 10 times
+//    do {
         previous_estimate = estimate;
         float J_z = ((estimate - Vi)*pow((Vi + estimate),2)) / L_squared - bf->jerk;
         float J_d = (2*Vi*estimate - Vi_squared + 3*pow(estimate,2)) / L_squared;
         estimate = estimate - J_z/J_d;
-    } while (i-- != 0 && !fp_EQ(previous_estimate, estimate));
+//    } while (i-- != 0 && !fabs(previous_estimate - estimate) < 10);
 #endif
 
     return estimate;
