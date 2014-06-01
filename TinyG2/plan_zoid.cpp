@@ -178,7 +178,8 @@ void mp_calculate_trapezoid(mpBuf_t *bf)
 	// Reminder: We already eliminated the cases where we need to have a body-only move.
 	
 	bf->body_length = 0;
-	if (bf->length <= (MIN_HEAD_LENGTH + MIN_BODY_LENGTH + MIN_TAIL_LENGTH)) {	// head-only & tail-only cases
+	float minimum_length = mp_get_target_length(bf->entry_velocity, bf->exit_velocity, bf);
+	if (bf->length <= (minimum_length + MIN_BODY_LENGTH)) {	// head-only & tail-only cases
 
 		if (bf->entry_velocity > bf->exit_velocity)	{		// tail-only cases (short decelerations)
 

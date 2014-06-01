@@ -665,10 +665,24 @@ static stat_t _exec_aline_segment()
 	if ((--mr.segment_count == 0) && (mr.section_state == SECTION_2nd_HALF) &&
 		(cm.motion_state == MOTION_RUN) && (cm.cycle_state == CYCLE_MACHINING)) {
 		copy_vector(mr.gm.target, mr.waypoint[mr.section]);
+		// reset target_c?
 	} else {
 		float segment_length = mr.segment_velocity * mr.segment_time;
 		for (i=0; i<AXES; i++) {
-			mr.gm.target[i] = mr.position[i] + (mr.unit[i] * segment_length);
+			float new_offset         = (mr.unit[i] * segment_length);
+
+			// Using the Kahan summation algorithm to mitigate floating-point errors
+			// Short form:
+			// mr.gm.target[i] = mr.position[i] + new_offset;
+
+			// Long form:
+			// Compute our offset including the previous roundoff error
+			float new_offset_corrected = new_offset - mr.position_c[i];
+			// Now add in our new_offset (corrected)
+			float new_target         = mr.position[i] + new_offset_corrected;
+			// Now find and store our new roundoff error but subtracting all the tings we added up
+			mr.position_c[i]         = (new_target - mr.position[i]) - new_offset_corrected;
+			mr.gm.target[i]          = new_target;
 		}
 	}
 
