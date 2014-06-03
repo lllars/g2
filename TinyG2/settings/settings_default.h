@@ -46,6 +46,9 @@
 #define JUNCTION_ACCELERATION	100000					// centripetal acceleration around corners
 
 // **** settings.h overrides ****
+#undef SR_DEFAULTS
+//#define STATUS_REPORT_DEFAULTS	"line","posx","posy","posz","vel","_cs1","_es1","_xs1","_fe1","_cs2","_es2","_xs2","_fe2","unit","path","stat"
+#define SR_DEFAULTS	"line","posx","posy","posz","vel","_cs1","_es1","_xs1","_fe1","_cs2","_es2","_xs2","_fe2"
 
 // *** motor settings ***
 

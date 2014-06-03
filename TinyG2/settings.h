@@ -86,7 +86,7 @@
 
 // machine default profiles - choose only one:
 
-//#include "settings/settings_default.h"				// Default settings for release
+#include "settings/settings_default.h"				// Default settings for release
 //#include "settings/settings_test.h"					// Settings for testing - not for release
 //#include "settings/settings_hammer.h"					// Hammer torque demo
 //#include "settings/settings_pendulum.h"				// Pendulum motion demo
@@ -100,7 +100,7 @@
 //#include "settings/settings_ultimaker.h"				// Ultimaker 3D printer
 //#include "settings/settings_zen7x12.h"				// Zen Toolworks 7x12
 //#include "settings/settings_Ultimaker.h"
-#include "settings/settings_Ultimaker_Rob_v9h.h"
+//#include "settings/settings_Ultimaker_Rob_v9h.h"
 /*** Handle optional modules that may not be in every machine ***/
 
 // If PWM_1 is not defined fill it with default values

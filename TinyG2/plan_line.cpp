@@ -35,10 +35,6 @@
 #include "report.h"
 #include "util.h"
 
-#ifdef __cplusplus
-extern "C"{
-#endif
-
 // aline planner routines / feedhold planning
 
 static void _plan_block_list(mpBuf_t *bf, uint8_t *mr_flag);
@@ -136,12 +132,11 @@ stat_t mp_aline(const GCodeState_t *gm_in)
 
 	// trap short lines
 	//	if (length < MIN_LENGTH_MOVE) { return (STAT_MINIMUM_LENGTH_MOVE);}
-	if (gm_in->move_time < MIN_BLOCK_TIME) {
-		if (path_control_mode == PATH_CONTINUOUS) {
-			printf("ALINE() line #%lu, move_time: %f\n", gm_in->linenum, (double)gm_in->move_time);
+	if (path_control_mode == PATH_CONTINUOUS) {
+		if (gm_in->move_time < MIN_BLOCK_TIME) {
+			printf("ALINE() line%lu %f\n", gm_in->linenum, (double)gm_in->move_time);
 			return (STAT_MINIMUM_TIME_MOVE);
 		}
-		// If we accept the move, then we will fix it later...
 	}
 
 	// get a cleared buffer and setup move variables
@@ -150,10 +145,17 @@ stat_t mp_aline(const GCodeState_t *gm_in)
 	bf->bf_func = mp_exec_aline;									// register the callback to the exec function
 	memcpy(&bf->gm, gm_in, sizeof(GCodeState_t));					// copy model state into planner buffer
 
-	if (bf->gm.move_time < MIN_BLOCK_TIME) {
-		// We know it's too short, and that we're going to use it, so fix it!
-		bf->gm.move_time = MIN_BLOCK_TIME;
+#ifdef __BLOCK_ANNEALING
+	mpBuf_t *bp = bf->pv; 							// previous block pointer
+
+	// run block annealing code
+	if (_anneal_block(bf) == true) {
+		mp_unget_write_buffer();
+		_plan_block_list(bp, &mr_flag);				// replan block list
+		copy_vector(mm.position, bp->gm.target);	// set the planner position
+		return (STAT_OK);
 	}
+#endif
 
 #ifndef __NEW_JERK
 	// compute both the unit vector and the jerk term in the same pass for efficiency
@@ -184,7 +186,7 @@ stat_t mp_aline(const GCodeState_t *gm_in)
 	}
 	bf->jerk = sqrt(bf->jerk) * JERK_MULTIPLIER;
 
-#else	// compute unit vector	
+#else	// compute unit vector
 	float diff;
  	for (uint8_t axis=AXIS_X; axis<AXIS_C; axis++) {
 		if (fp_NOT_ZERO(diff = bf->gm.target[axis] - mm.position[axis])) {
@@ -202,39 +204,39 @@ stat_t mp_aline(const GCodeState_t *gm_in)
 	for (uint8_t axis=AXIS_X; axis<AXIS_C; axis++) {
 		if (fp_NOT_ZERO(bf->unit[axis])) {
 			axis_relative_length = _get_relative_length( junction_velocity * bf->unit[axis],
-														 bf->cruise_vmax* bf->unit[axis], 
-														 cm.a[axis].jerk_max * JERK_MULTIPLIER);
+                                                        bf->cruise_vmax* bf->unit[axis],
+                                                        cm.a[axis].jerk_max * JERK_MULTIPLIER);
 			if (axis_relative_length > longest_axis_length) {
 				longest_axis_length = axis_relative_length;
 				bf->jerk = cm.a[axis].jerk_max * JERK_MULTIPLIER;
 			}
 		}
 	}
-/*
-	// alternate #2 - relative length computed inline
-	for (uint8_t axis=AXIS_X; axis<AXIS_C; axis++) {
-		if (fp_NOT_ZERO(bf->unit[axis])) {
-			axis_relative_length = (fabs(junction_velocity * bf->unit[axis] - bf->cruise_vmax * bf->unit[axis]) *
-									sqrt(fabs(junction_velocity * bf->unit[axis] - bf->cruise_vmax * bf->unit[axis]) /
-									cm.a[axis].jerk_max * JERK_MULTIPLIER));
-			if (axis_relative_length > longest_axis_length) {
-				longest_axis_length = axis_relative_length;
-				bf->jerk = cm.a[axis].jerk_max * JERK_MULTIPLIER;
-			}
-		}
-	}
+    /*
+     // alternate #2 - relative length computed inline
+     for (uint8_t axis=AXIS_X; axis<AXIS_C; axis++) {
+     if (fp_NOT_ZERO(bf->unit[axis])) {
+     axis_relative_length = (fabs(junction_velocity * bf->unit[axis] - bf->cruise_vmax * bf->unit[axis]) *
+     sqrt(fabs(junction_velocity * bf->unit[axis] - bf->cruise_vmax * bf->unit[axis]) /
+     cm.a[axis].jerk_max * JERK_MULTIPLIER));
+     if (axis_relative_length > longest_axis_length) {
+     longest_axis_length = axis_relative_length;
+     bf->jerk = cm.a[axis].jerk_max * JERK_MULTIPLIER;
+     }
+     }
+     }
 
-	// alternate #3 - relative length computed inline as an abbreviated expression
-	for (uint8_t axis=AXIS_X; axis<AXIS_C; axis++) {
-		if (fp_NOT_ZERO(bf->unit[axis])) {
-			axis_relative_length = fabs(bf->unit[axis] * cm.a[axis].jerk_max);
-			if (axis_relative_length > longest_axis_length) {
-				longest_axis_length = axis_relative_length;
-				bf->jerk = cm.a[axis].jerk_max * JERK_MULTIPLIER;
-			}
-		}
-	}
-*/
+     // alternate #3 - relative length computed inline as an abbreviated expression
+     for (uint8_t axis=AXIS_X; axis<AXIS_C; axis++) {
+     if (fp_NOT_ZERO(bf->unit[axis])) {
+     axis_relative_length = fabs(bf->unit[axis] * cm.a[axis].jerk_max);
+     if (axis_relative_length > longest_axis_length) {
+     longest_axis_length = axis_relative_length;
+     bf->jerk = cm.a[axis].jerk_max * JERK_MULTIPLIER;
+     }
+     }
+     }
+     */
 #endif // __NEW_JERK
 
     _calc_jerk_values(bf);
@@ -348,31 +350,31 @@ static void _plan_block_list(mpBuf_t *bf, uint8_t *mr_flag)
 
 	// forward planning pass - recomputes trapezoids in the list from the first block to the bf block.
 	bp = mp_get_next_buffer(bp);
-    while (bp != bf) {
-        if ((bp->pv == bf) || (*mr_flag == true))  {
-            bp->entry_velocity = bp->entry_vmax;		// first block in the list
-            *mr_flag = false;
+	while (bp != bf) {
+		if ((bp->pv == bf) || (*mr_flag == true))  {
+			bp->entry_velocity = bp->entry_vmax;		// first block in the list
+			*mr_flag = false;
         } else {
-            bp->entry_velocity = bp->pv->exit_velocity;	// other blocks in the list
-        }
-        bp->cruise_velocity = bp->cruise_vmax;
-        bp->exit_velocity = min4( bp->exit_vmax, 
-                                  bp->nx->entry_vmax,
-                                  bp->nx->braking_velocity, 
+			bp->entry_velocity = bp->pv->exit_velocity;	// other blocks in the list
+		}
+		bp->cruise_velocity = bp->cruise_vmax;
+		bp->exit_velocity = min4( bp->exit_vmax,
+                                 bp->nx->entry_vmax,
+                                 bp->nx->braking_velocity,
                                  (bp->entry_velocity + bp->delta_vmax) );
 
-        mp_calculate_trapezoid(bp);
+		mp_calculate_trapezoid(bp);
 
-        // test for optimally planned trapezoids - only need to check various exit conditions
-        if ( ( (fp_EQ(bp->exit_velocity, bp->exit_vmax)) ||
+		// test for optimally planned trapezoids - only need to check various exit conditions
+		if  ( ( (fp_EQ(bp->exit_velocity, bp->exit_vmax)) ||
                (fp_EQ(bp->exit_velocity, bp->nx->entry_vmax)) )  ||
              ( (bp->pv->replannable == false) &&
-               (fp_EQ(bp->exit_velocity, (bp->entry_velocity + bp->delta_vmax))) ) ) {
-            bp->replannable = false;
-        }
-        bp = mp_get_next_buffer(bp);
-    }
-
+              (fp_EQ(bp->exit_velocity, (bp->entry_velocity + bp->delta_vmax))) ) ) {
+                 bp->replannable = false;
+             }
+		bp = mp_get_next_buffer(bp);
+	}
+    
 	// finish up the last block move
 	bp->entry_velocity = bp->pv->exit_velocity;
 	bp->cruise_velocity = bp->cruise_vmax;
@@ -1039,8 +1041,3 @@ static void _test_get_junction_vmax()
 #endif // __TEST_GET_JUNCTION_VMAX
 #endif // __UNIT_TEST_PLANNER
 #endif // __UNIT_TESTS
-
-#ifdef __cplusplus
-}
-#endif
-

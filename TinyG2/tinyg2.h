@@ -36,7 +36,7 @@
 #include "MotatePins.h"
 
 #ifndef TINYG_FIRMWARE_BUILD
-#define TINYG_FIRMWARE_BUILD   		040.01	// Homing hacks for PocketNC
+#define TINYG_FIRMWARE_BUILD   		140.01	// Homing hacks for PocketNC
 #endif
 #define TINYG_FIRMWARE_VERSION		0.8		// firmware major version
 #define TINYG_HARDWARE_PLATFORM		3		// hardware platform indicator (2 = Native Arduino Due)
@@ -53,7 +53,7 @@
 
 /****** COMPILE-TIME SETTINGS ******/
 
-#define __STEP_CORRECTION
+//#define __STEP_CORRECTION
 //#define __JERK_EXEC							// comment to use forward difference based exec vs jerk computed exec
 //#define __POCKETNC							// enable PocketNC homing hacks
 //#define __SIMULATION						// shorthand to keep from having to comment and uncomment the below:
