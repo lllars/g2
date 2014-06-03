@@ -30,6 +30,7 @@
 #include "config.h"
 #include "planner.h"
 #include "kinematics.h"
+#include "hardware.h"
 #include "stepper.h"
 #include "encoder.h"
 #include "report.h"
@@ -398,7 +399,8 @@ static stat_t _exec_aline_head()
 			return(_exec_aline_body());						// skip ahead to the body generator
 		}
 		mr.midpoint_velocity = (mr.entry_velocity + mr.cruise_velocity) / 2;
-		mr.gm.move_time = mr.head_length / mr.midpoint_velocity;	// time for entire accel region
+		mr.gm.move_time = 2 * (mr.head_length / (mr.entry_velocity + mr.cruise_velocity));	// time for entire accel region
+//		mr.gm.move_time = ceil(mr.gm.move_time * FREQUENCY_DDA * 60.0) / (FREQUENCY_DDA * 60.0);
 
 #ifdef __JERK_EXEC
 		mr.segments = ceil(uSec(mr.gm.move_time) / (2 * NOM_SEGMENT_USEC)); // # of segments in *each half*
@@ -413,7 +415,8 @@ static stat_t _exec_aline_head()
 		mr.elapsed_accel_time = mr.segment_accel_time / 2;			// elapsed time starting point (offset)
 #else
 		mr.segments = ceil(uSec(mr.gm.move_time) / NOM_SEGMENT_USEC); // # of segments for the section
-		mr.segment_time = mr.gm.move_time / mr.segments;
+//		mr.segment_time = (2 * mr.head_length) / ((mr.entry_velocity + mr.cruise_velocity) * mr.segments);
+		mr.segment_time = mr.gm.move_time / mr.segments;// time to advance for each segment
 
 		// line needed by fwd-diff exec
 		_init_forward_diffs(mr.entry_velocity, mr.cruise_velocity);
@@ -538,7 +541,9 @@ static stat_t _exec_aline_tail()
 	if (mr.section_state == SECTION_NEW) {
 		if (fp_ZERO(mr.tail_length)) { return(STAT_OK);}	// end the move
 		mr.midpoint_velocity = (mr.cruise_velocity + mr.exit_velocity) / 2;
-		mr.gm.move_time = mr.tail_length / mr.midpoint_velocity;
+		mr.gm.move_time = 2 * (mr.head_length / (mr.cruise_velocity + mr.exit_velocity));	// time for entire accel region
+//		mr.gm.move_time = ceil(mr.gm.move_time * FREQUENCY_DDA * 60.0) / (FREQUENCY_DDA * 60.0);
+
 #ifdef __JERK_EXEC
 		mr.segments = ceil(uSec(mr.gm.move_time) / (2 * NOM_SEGMENT_USEC));// # of segments in *each half*
 		mr.segment_time = mr.gm.move_time / (2 * mr.segments);// time to advance for each segment
@@ -552,6 +557,8 @@ static stat_t _exec_aline_tail()
 		mr.elapsed_accel_time = mr.segment_accel_time / 2; //compute time from midpoint of segment
 #else
 		mr.segments = ceil(uSec(mr.gm.move_time) / NOM_SEGMENT_USEC);// # of segments for the section
+
+//		mr.segment_time = (2 * mr.head_length) / ((mr.cruise_velocity + mr.exit_velocity) * mr.segments);
 		mr.segment_time = mr.gm.move_time / mr.segments;// time to advance for each segment
 
 		// line needed by fwd-diff exec

@@ -310,10 +310,10 @@ enum prepBufferState {
  *	is too small and/or amount too large and/or holdoff is too small you may get a runaway correction 
  *	and error will grow instead of shrink (or oscillate).
  */
-#define STEP_CORRECTION_THRESHOLD	(float)2.00		// magnitude of forwarding error to apply correction (in steps)
-#define STEP_CORRECTION_FACTOR		(float)0.5		// factor to apply to step correction for a single segment
-#define STEP_CORRECTION_MAX			(float)1.0		// max step correction allowed in a single segment
-#define STEP_CORRECTION_HOLDOFF		 	 	  2		// minimum number of segments to wait between error correction
+#define STEP_CORRECTION_THRESHOLD	(float)1.00		// magnitude of forwarding error to apply correction (in steps)
+#define STEP_CORRECTION_FACTOR		(float)1.00		// factor to apply to step correction for a single segment
+#define STEP_CORRECTION_MAX			(float)2.0		// max step correction allowed in a single segment
+#define STEP_CORRECTION_HOLDOFF		 	   2		// minimum number of segments to wait between error correction
 #define STEP_INITIAL_DIRECTION		DIRECTION_CW
 
 /*
@@ -359,7 +359,7 @@ typedef struct stConfig {				// stepper configs
 // Motor runtime structure. Used exclusively by step generation ISR (HI)
 
 typedef struct stRunMotor {				// one per controlled motor
-	uint32_t substep_increment;			// total steps in axis times substeps factor
+	int32_t substep_increment;			// total steps in axis times substeps factor
 	int32_t substep_accumulator;		// DDA phase angle accumulator
 	uint8_t power_state;				// state machine for managing motor power
 	uint32_t power_systick;				// sys_tick for next motor power state transition
@@ -368,8 +368,8 @@ typedef struct stRunMotor {				// one per controlled motor
 
 typedef struct stRunSingleton {			// Stepper static values and axis parameters
 	uint16_t magic_start;				// magic number to test memory integrity
-	uint32_t dda_ticks_downcount;		// tick down-counter (unscaled)
-	uint32_t dda_ticks_X_substeps;		// ticks multiplied by scaling factor
+	int32_t dda_ticks_downcount;		// tick down-counter (unscaled)
+	int32_t dda_ticks_X_substeps;		// ticks multiplied by scaling factor
 	stRunMotor_t mot[MOTORS];			// runtime motor structures
 	uint16_t magic_end;
 } stRunSingleton_t;
@@ -378,7 +378,7 @@ typedef struct stRunSingleton {			// Stepper static values and axis parameters
 // Must be careful about volatiles in this one
 
 typedef struct stPrepMotor {
-	uint32_t substep_increment;			// total steps in axis times substep factor
+	int32_t substep_increment;			// total steps in axis times substep factor
 
 	// direction and direction change
 	uint8_t direction;					// travel direction corrected for polarity (CW==0. CCW==1)
@@ -403,8 +403,9 @@ typedef struct stPrepSingleton {
 	uint8_t segment_ready;				// flag indicating the next segment is ready for loading
 
 	uint16_t dda_period;				// DDA or dwell clock period setting
-	uint32_t dda_ticks;					// DDA or dwell ticks for the move
-	uint32_t dda_ticks_X_substeps;		// DDA ticks scaled by substep factor
+	int32_t dda_ticks;					// DDA or dwell ticks for the move
+	int32_t dda_ticks_X_substeps;		// DDA ticks scaled by substep factor
+	float dda_ticks_dither;				// dithering value to correct DDA ticks integer roundoff errors 
 	stPrepMotor_t mot[MOTORS];			// prep time motor structs
 
 	uint16_t magic_end;

@@ -201,6 +201,7 @@ void stepper_init()
 	exec_timer.setInterrupts(kInterruptOnSoftwareTrigger | kInterruptPriorityLowest);
 	st_pre.exec_state = PREP_BUFFER_OWNED_BY_EXEC;
 	st_pre.segment_ready = false;						// used for diagnostics only
+	st_pre.dda_ticks_dither = 0;
 
 	// setup motor power levels and apply power level to stepper drivers
 	for (uint8_t motor=0; motor<MOTORS; motor++) {
@@ -817,7 +818,7 @@ static void _load_move()
  *
  * NOTE:  Many of the expressions are sensitive to casting and execution order to avoid long-term
  *		  accuracy errors due to floating point round off. One earlier failed attempt was:
- *		    dda_ticks_X_substeps = (uint32_t)((microseconds/1000000) * f_dda * dda_substeps);
+ *		    dda_ticks_X_substeps = (int32_t)((microseconds/1000000) * f_dda * dda_substeps);
  */
 
 stat_t st_prep_line(float travel_steps[], float following_error[], float segment_time)
@@ -833,7 +834,14 @@ stat_t st_prep_line(float travel_steps[], float following_error[], float segment
 	// - ticks_X_substeps is the maximum depth of the DDA accumulator (as a negative number)
 
 	st_pre.dda_period = _f_to_period(FREQUENCY_DDA);				// NB: AVR only (non Motate)
-	st_pre.dda_ticks = (int32_t)(segment_time * 60 * FREQUENCY_DDA);// NB: converts minutes to seconds
+	double integer_ticks;
+	double overflow;
+	double fractional_ticks = modf((segment_time * FREQUENCY_DDA * 60), &integer_ticks);
+	
+	st_pre.dda_ticks_dither += fractional_ticks;
+	st_pre.dda_ticks = (int32_t)(integer_ticks + st_pre.dda_ticks_dither);
+	st_pre.dda_ticks_dither = modf(st_pre.dda_ticks_dither, &overflow);
+	
 	st_pre.dda_ticks_X_substeps = st_pre.dda_ticks * DDA_SUBSTEPS;
 
 	// setup motor parameters
@@ -1014,7 +1022,7 @@ stat_t st_set_tr(cmdObj_t *cmd)			// motor travel per revolution
 
 stat_t st_set_mi(cmdObj_t *cmd)			// motor microsteps
 {
-	if (fp_NE(cmd->value,1) && fp_NE(cmd->value,2) && fp_NE(cmd->value,4) && fp_NE(cmd->value,8)) {
+	if (fp_NE(cmd->value,1) && fp_NE(cmd->value,2) && fp_NE(cmd->value,4) && fp_NE(cmd->value,8) && fp_NE(cmd->value,16) && fp_NE(cmd->value,32)) {
 		cmd_add_conditional_message((const char_t *)"*** WARNING *** Setting non-standard microstep value");
 	}
 	set_ui8(cmd);						// set it anyway, even if it's unsupported
@@ -1048,7 +1056,8 @@ stat_t st_set_pl(cmdObj_t *cmd)	// motor power level
 #ifdef __ARM
 	if (cmd->value < (float)0.0) cmd->value = 0.0;
 	if (cmd->value > (float)1.0) {
-		if (cmd->value > (float)100) cmd->value = 1;
+		if (cmd->value > (float)100)
+			cmd->value = 100;
  		cmd->value /= 100;		// accommodate old 0-100 inputs
 	}
 	set_flt(cmd);	// set power_setting value in the motor config struct (st)
