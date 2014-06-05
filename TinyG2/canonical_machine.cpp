@@ -501,12 +501,12 @@ void cm_set_move_times(GCodeState_t *gcode_state)
 	gcode_state->move_time = max4(inv_time, max_time, xyz_time, abc_time);
 }
 
-/* 
+/*
  * cm_test_soft_limits() - return error code if soft limit is exceeded
  *
  *	Must be called with target properly set in GM struct. Best done after cm_set_model_target().
  *
- *	Tests for soft limit for any homed axis if min and max are different values. You can set min 
+ *	Tests for soft limit for any homed axis if min and max are different values. You can set min
  *	and max to 0,0 to disable soft limits for an axis. Also will not test a min or a max if the 
  *	value is < -1000000 (negative one million). This allows a single end to be tested w/the other 
  *	disabled, should that requirement ever arise.

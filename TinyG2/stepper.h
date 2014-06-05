@@ -300,7 +300,8 @@ enum prepBufferState {
  *	The ARM is about 1/2 that (or less) as the DDA clock rate is higher. Decreasing the nominal
  *	segment time increases the number precision.
  */
-#define DDA_SUBSTEPS ((MAX_LONG * 0.90) / (FREQUENCY_DDA * (NOM_SEGMENT_TIME * 60)))
+//#define DDA_SUBSTEPS ((MAX_LONG * 0.90) / (FREQUENCY_DDA * (NOM_SEGMENT_TIME * 60)))
+#define DDA_SUBSTEPS 1000000
 
 /* Step correction settings
  *	Step correction settings determine how the encoder error is fed back to correct position errors.
@@ -310,10 +311,10 @@ enum prepBufferState {
  *	is too small and/or amount too large and/or holdoff is too small you may get a runaway correction 
  *	and error will grow instead of shrink (or oscillate).
  */
-#define STEP_CORRECTION_THRESHOLD	(float)1.00		// magnitude of forwarding error to apply correction (in steps)
-#define STEP_CORRECTION_FACTOR		(float)1.00		// factor to apply to step correction for a single segment
-#define STEP_CORRECTION_MAX			(float)2.0		// max step correction allowed in a single segment
-#define STEP_CORRECTION_HOLDOFF		 	   2		// minimum number of segments to wait between error correction
+#define STEP_CORRECTION_THRESHOLD	(float)2.00		// magnitude of forwarding error to apply correction (in steps)
+#define STEP_CORRECTION_FACTOR		(float)0.25		// factor to apply to step correction for a single segment
+#define STEP_CORRECTION_MAX			(float)0.50		// max step correction allowed in a single segment
+#define STEP_CORRECTION_HOLDOFF		 	 	  6		// minimum number of segments to wait between error correction
 #define STEP_INITIAL_DIRECTION		DIRECTION_CW
 
 /*
@@ -379,6 +380,7 @@ typedef struct stRunSingleton {			// Stepper static values and axis parameters
 
 typedef struct stPrepMotor {
 	int32_t substep_increment;			// total steps in axis times substep factor
+	int32_t substep_increment_dither;	// dithering value to correct integer roundof error
 
 	// direction and direction change
 	uint8_t direction;					// travel direction corrected for polarity (CW==0. CCW==1)

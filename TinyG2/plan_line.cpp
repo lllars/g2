@@ -145,6 +145,14 @@ stat_t mp_aline(const GCodeState_t *gm_in)
 	bf->bf_func = mp_exec_aline;									// register the callback to the exec function
 	memcpy(&bf->gm, gm_in, sizeof(GCodeState_t));					// copy model state into planner buffer
 
+	// If we got this far,t hen we're accepting short moves and need to ensure
+	// that they are of minimal time.
+	// Also note that at this point time and length haven't been entangled yet,
+	// and we can freely change them independently.
+	if (bf->gm.move_time < MIN_BLOCK_TIME) {
+		bf->gm.move_time = MIN_BLOCK_TIME;
+	}
+
 #ifdef __BLOCK_ANNEALING
 	mpBuf_t *bp = bf->pv; 							// previous block pointer
 
