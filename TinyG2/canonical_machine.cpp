@@ -659,7 +659,7 @@ stat_t cm_set_coord_offsets(uint8_t coord_system, float offset[], float flag[])
 	}
 	for (uint8_t axis = AXIS_X; axis < AXES; axis++) {
 		if (fp_TRUE(flag[axis])) {
-			cm.offset[coord_system][axis] = offset[axis];
+			cm.offset[coord_system][axis] = _to_millimeters(offset[axis]);
 			cm.deferred_write_flag = true;								// persist offsets once machining cycle is over
 		}
 	}
@@ -1220,8 +1220,8 @@ stat_t cm_feedhold_sequencing_callback()
 		cm.feedhold_requested = false;
 	}
 	if (cm.queue_flush_requested == true) {
-		if ((cm.motion_state == MOTION_STOP) ||
-			((cm.motion_state == MOTION_HOLD) && (cm.hold_state == FEEDHOLD_HOLD))) {
+		if (((cm.motion_state == MOTION_STOP) ||
+			((cm.motion_state == MOTION_HOLD) && (cm.hold_state == FEEDHOLD_HOLD))) && !cm_get_runtime_busy()) {
 			cm.queue_flush_requested = false;
 			cm_queue_flush();
 		}
@@ -1251,6 +1251,11 @@ stat_t cm_queue_flush()
 	xio_reset_usb_rx_buffers();				// flush serial queues
 #endif
 	mp_flush_planner();						// flush planner queue
+	qr_request_queue_report(0);				// request a queue report, since we've changed the number of buffers available
+//	rx_request_rx_report();
+
+	// Note: The following uses low-level mp calls for absolute position.
+	//		 It could also use cm_get_absolute_position(RUNTIME, axis);
 
 	for (uint8_t axis = AXIS_X; axis < AXES; axis++) {
 		cm_set_position(axis, mp_get_runtime_absolute_position(axis)); // set mm from mr
@@ -1682,10 +1687,54 @@ stat_t cm_set_am(nvObj_t *nv)		// axis mode
  *	number is > 1,000,000 it is divided by 1,000,000 before storing. Numbers are accepted in
  *	either millimeter or inch mode and converted to millimeter mode.
  */
-
+/*
 stat_t cm_set_jrk(nvObj_t *nv)
 {
 	if (nv->value > 1000000) nv->value /= 1000000;
+	set_flu(nv);
+	return(STAT_OK);
+}
+*/
+
+/**** Jerk functions
+ * cm_get_axis_jerk() - returns jerk for an axis
+ * cm_set_axis_jerk() - sets the jerk for an axis, including recirpcal and cached values
+ *
+ * cm_set_xjm()		  - set jerk max value - called from dispatch table
+ * cm_set_xjh()		  - set jerk homing value - called from dispatch table
+ *
+ *	Jerk values can be rather large, often in the billions. This makes for some pretty big
+ *	numbers for people to deal with. Jerk values are stored in the system in truncated format;
+ *	values are divided by 1,000,000 then reconstituted before use.
+ *
+ *	The set_xjm() nad set_xjh() functions will accept either truncated or untruncated jerk
+ *	numbers as input. If the number is > 1,000,000 it is divided by 1,000,000 before storing.
+ *	Numbers are accepted in either millimeter or inch mode and converted to millimeter mode.
+ *
+ *	The axis_jerk() functions expect the jerk in divided-by 1,000,000 form
+ */
+float cm_get_axis_jerk(uint8_t axis)
+{
+	return (cm.a[axis].jerk_max);
+}
+
+void cm_set_axis_jerk(uint8_t axis, float jerk)
+{
+	cm.a[axis].jerk_max = jerk;
+	cm.a[axis].recip_jerk = 1/(jerk * JERK_MULTIPLIER);
+}
+
+stat_t cm_set_xjm(nvObj_t *nv)
+{
+	if (nv->value > JERK_MULTIPLIER) nv->value /= JERK_MULTIPLIER;
+	set_flu(nv);
+	cm_set_axis_jerk(_get_axis(nv->index), nv->value);
+	return(STAT_OK);
+}
+
+stat_t cm_set_xjh(nvObj_t *nv)
+{
+	if (nv->value > JERK_MULTIPLIER) nv->value /= JERK_MULTIPLIER;
 	set_flu(nv);
 	return(STAT_OK);
 }
@@ -1841,7 +1890,7 @@ void cm_print_gdi(nvObj_t *nv) { text_print_int(nv, fmt_gdi);}
 /* system state print functions */
 
 const char fmt_ja[] PROGMEM = "[ja]  junction acceleration%8.0f%s\n";
-const char fmt_ct[] PROGMEM = "[ct]  chordal tolerance%16.3f%s\n";
+const char fmt_ct[] PROGMEM = "[ct]  chordal tolerance%17.4f%s\n";
 const char fmt_sl[] PROGMEM = "[sl]  soft limit enable%12d\n";
 const char fmt_ml[] PROGMEM = "[ml]  min line segment%17.3f%s\n";
 const char fmt_ma[] PROGMEM = "[ma]  min arc segment%18.3f%s\n";
