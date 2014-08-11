@@ -1,4 +1,4 @@
- /*
+/*
  * plan_line.c - acceleration managed line planning and motion execution
  * This file is part of the TinyG project
  *
@@ -36,28 +36,26 @@
 #include "util.h"
 
 // aline planner routines / feedhold planning
-
+static void _calc_move_times(GCodeState_t *gms, const float position[]);
 static void _plan_block_list(mpBuf_t *bf, uint8_t *mr_flag);
-//static float _get_intersection_distance(const float Vi_squared, const float Vt_squared, const float L, const mpBuf_t *bf);
 static float _get_junction_vmax(const float a_unit[], const float b_unit[]);
 static void _reset_replannable_list(void);
 
 /* Runtime-specific setters and getters
  *
+ * mp_zero_segment_velocity() 		- correct velocity in last segment for reporting purposes
  * mp_get_runtime_velocity() 		- returns current velocity (aggregate)
- * mp_get_runtime_machine_position() - returns current axis position in machine coordinates
+ * mp_get_runtime_machine_position()- returns current axis position in machine coordinates
+ * mp_set_runtime_work_offset()		- set offsets in the MR struct
  * mp_get_runtime_work_position() 	- returns current axis position in work coordinates
  *									  that were in effect at move planning time
- * mp_set_runtime_work_offset()
- * mp_zero_segment_velocity() 		- correct velocity in last segment for reporting purposes
  */
 
+void mp_zero_segment_velocity() { mr.segment_velocity = 0;}
 float mp_get_runtime_velocity(void) { return (mr.segment_velocity);}
 float mp_get_runtime_absolute_position(uint8_t axis) { return (mr.position[axis]);}
-float mp_get_runtime_work_position(uint8_t axis) { return (mr.position[axis] - mr.gm.work_offset[axis]);}
 void mp_set_runtime_work_offset(float offset[]) { copy_vector(mr.gm.work_offset, offset);}
-void mp_zero_segment_velocity() { mr.segment_velocity = 0;}
-float* mp_get_planner_position_vector() { return (mm.position);}
+float mp_get_runtime_work_position(uint8_t axis) { return (mr.position[axis] - mr.gm.work_offset[axis]);}
 
 /*
  * mp_get_runtime_busy() - return TRUE if motion control busy (i.e. robot is moving)
@@ -68,75 +66,43 @@ float* mp_get_planner_position_vector() { return (mm.position);}
 
 uint8_t mp_get_runtime_busy()
 {
-	if ((stepper_isbusy() == true) || (mr.move_state == MOVE_RUN)) return (true);
+	if ((st_runtime_isbusy() == true) || (mr.move_state == MOVE_RUN)) return (true);
 	return (false);
 }
 
-/* 
- * _calc_jerk_values()
- *
- *	This is a utility function to calculate jerk, recip_jerk, and cbrt_jerk,
- *  if the jerk value has changed.
- */
-
-void _calc_jerk_values(mpBuf_t *bf)
-{
-//	if (fabs(bf->jerk - mm.prev_jerk) < JERK_MATCH_PRECISION) {	// can we re-use jerk terms?
-//		bf->cbrt_jerk = mm.prev_cbrt_jerk;
-//		bf->recip_jerk = mm.prev_recip_jerk;
-//	} else {
-		bf->cbrt_jerk = cbrt(bf->jerk);
-		bf->recip_jerk = 1/bf->jerk;
-		mm.prev_jerk = bf->jerk;
-		mm.prev_cbrt_jerk = bf->cbrt_jerk;
-		mm.prev_recip_jerk = bf->recip_jerk;
-//	}
-}
-
-/**************************************************************************
+/****************************************************************************************
  * mp_aline() - plan a line with acceleration / deceleration
  *
- *	This function uses constant jerk motion equations to plan acceleration 
- *	and deceleration. The jerk is the rate of change of acceleration; it's
- *	the 1st derivative of acceleration, and the 3rd derivative of position. 
- *	Jerk is a measure of impact to the machine. Controlling jerk smooths 
- *	transitions between moves and allows for faster feeds while controlling 
- *	machine oscillations and other undesirable side-effects.
+ *	This function uses constant jerk motion equations to plan acceleration and deceleration
+ *	The jerk is the rate of change of acceleration; it's the 1st derivative of acceleration,
+ *	and the 3rd derivative of position. Jerk is a measure of impact to the machine.
+ *	Controlling jerk smooths transitions between moves and allows for faster feeds while
+ *	controlling machine oscillations and other undesirable side-effects.
  *
- * 	Note 1: All math is done in absolute coordinates using single precision
- *	floating point (float).
+ * 	Note All math is done in absolute coordinates using single precision floating point (float).
  *
- *	Note 2: Returning a status that is not STAT_OK means the endpoint is NOT
- *	advanced. So lines that are too short to move will accumulate and get
- *	executed once the accumulated error exceeds the minimums
+ *	Note: Returning a status that is not STAT_OK means the endpoint is NOT advanced. So lines
+ *	that are too short to move will accumulate and get executed once the accumulated error
+ *	exceeds the minimums.
  */
 
-/*
-#define __NEW_JERK
-static float _get_relative_length(const float Vi, const float Vt, const float jerk)
-{
-	return (fabs(Vi-Vt) * sqrt(fabs(Vi-Vt) / jerk));
-}
-*/
-
-stat_t mp_aline(const GCodeState_t *gm_in)
+stat_t mp_aline(GCodeState_t *gm_in)
 {
 	mpBuf_t *bf; 						// current move pointer
 	float exact_stop = 0;				// preset this value OFF
 	float junction_velocity;
 	uint8_t mr_flag = false;
-	uint8_t path_control_mode = cm_get_path_control(MODEL);
+//	uint8_t path_control_mode = cm_get_path_control(MODEL);
 
-	// exit out if the move has zero movement. At all.
-	if (vector_equal(mm.position, gm_in->target)) return (STAT_OK);
+	if (vector_equal(mm.position, gm_in->target)) 	// exit if the move has zero movement. At all.
+		return (STAT_OK);
 
-	// trap short lines
-	//	if (length < MIN_LENGTH_MOVE) { return (STAT_MINIMUM_LENGTH_MOVE);}
-	if (path_control_mode == PATH_CONTINUOUS) {
-		if (gm_in->move_time < MIN_BLOCK_TIME) {
-			printf("ALINE() line%lu %f\n", gm_in->linenum, (double)gm_in->move_time);
-			return (STAT_MINIMUM_TIME_MOVE);
-		}
+	_calc_move_times(gm_in, mm.position);			// set move time and minimum time in the state
+	if (gm_in->move_time < MIN_BLOCK_TIME) {
+//	if (gm_in->minimum_time < MIN_BLOCK_TIME) {
+//		rpt_exception(STAT_MINIMUM_TIME_MOVE);
+//		printf ("###:%1.0f", (double)(gm_in->move_time * 60000000));
+		return (STAT_MINIMUM_TIME_MOVE);
 	}
 
 	// get a cleared buffer and setup move variables
@@ -145,27 +111,6 @@ stat_t mp_aline(const GCodeState_t *gm_in)
 	bf->bf_func = mp_exec_aline;									// register the callback to the exec function
 	memcpy(&bf->gm, gm_in, sizeof(GCodeState_t));					// copy model state into planner buffer
 
-	// If we got this far,t hen we're accepting short moves and need to ensure
-	// that they are of minimal time.
-	// Also note that at this point time and length haven't been entangled yet,
-	// and we can freely change them independently.
-	if (bf->gm.move_time < MIN_BLOCK_TIME) {
-		bf->gm.move_time = MIN_BLOCK_TIME;
-	}
-
-#ifdef __BLOCK_ANNEALING
-	mpBuf_t *bp = bf->pv; 							// previous block pointer
-
-	// run block annealing code
-	if (_anneal_block(bf) == true) {
-		mp_unget_write_buffer();
-		_plan_block_list(bp, &mr_flag);				// replan block list
-		copy_vector(mm.position, bp->gm.target);	// set the planner position
-		return (STAT_OK);
-	}
-#endif
-
-#ifndef __NEW_JERK
 	// compute both the unit vector and the jerk term in the same pass for efficiency
 	float diff = bf->gm.target[AXIS_X] - mm.position[AXIS_X];
 	if (fp_NOT_ZERO(diff)) {
@@ -194,60 +139,16 @@ stat_t mp_aline(const GCodeState_t *gm_in)
 	}
 	bf->jerk = sqrt(bf->jerk) * JERK_MULTIPLIER;
 
-#else	// compute unit vector
-	float diff;
- 	for (uint8_t axis=AXIS_X; axis<AXIS_C; axis++) {
-		if (fp_NOT_ZERO(diff = bf->gm.target[axis] - mm.position[axis])) {
-			bf->unit[axis] = diff / bf->length;
-		}
+	if (fabs(bf->jerk - mm.prev_jerk) < JERK_MATCH_PRECISION) {	// can we re-use jerk terms?
+		bf->cbrt_jerk = mm.prev_cbrt_jerk;
+		bf->recip_jerk = mm.prev_recip_jerk;
+	} else {
+		bf->cbrt_jerk = cbrt(bf->jerk);
+		bf->recip_jerk = 1/bf->jerk;
+		mm.prev_jerk = bf->jerk;
+		mm.prev_cbrt_jerk = bf->cbrt_jerk;
+		mm.prev_recip_jerk = bf->recip_jerk;
 	}
-
-	// find the dominant jerk term
-	float axis_relative_length = 0;
-	float longest_axis_length = 0;
-	junction_velocity = _get_junction_vmax(bf->pv->unit, bf->unit);			// initial velocity
-	bf->cruise_vmax = bf->length / bf->gm.move_time;						// target velocity (requested, if not achieved)
-
-	// alternate #1 - relative length computed via subroutine
-	for (uint8_t axis=AXIS_X; axis<AXIS_C; axis++) {
-		if (fp_NOT_ZERO(bf->unit[axis])) {
-			axis_relative_length = _get_relative_length( junction_velocity * bf->unit[axis],
-                                                        bf->cruise_vmax* bf->unit[axis],
-                                                        cm.a[axis].jerk_max * JERK_MULTIPLIER);
-			if (axis_relative_length > longest_axis_length) {
-				longest_axis_length = axis_relative_length;
-				bf->jerk = cm.a[axis].jerk_max * JERK_MULTIPLIER;
-			}
-		}
-	}
-    /*
-     // alternate #2 - relative length computed inline
-     for (uint8_t axis=AXIS_X; axis<AXIS_C; axis++) {
-     if (fp_NOT_ZERO(bf->unit[axis])) {
-     axis_relative_length = (fabs(junction_velocity * bf->unit[axis] - bf->cruise_vmax * bf->unit[axis]) *
-     sqrt(fabs(junction_velocity * bf->unit[axis] - bf->cruise_vmax * bf->unit[axis]) /
-     cm.a[axis].jerk_max * JERK_MULTIPLIER));
-     if (axis_relative_length > longest_axis_length) {
-     longest_axis_length = axis_relative_length;
-     bf->jerk = cm.a[axis].jerk_max * JERK_MULTIPLIER;
-     }
-     }
-     }
-
-     // alternate #3 - relative length computed inline as an abbreviated expression
-     for (uint8_t axis=AXIS_X; axis<AXIS_C; axis++) {
-     if (fp_NOT_ZERO(bf->unit[axis])) {
-     axis_relative_length = fabs(bf->unit[axis] * cm.a[axis].jerk_max);
-     if (axis_relative_length > longest_axis_length) {
-     longest_axis_length = axis_relative_length;
-     bf->jerk = cm.a[axis].jerk_max * JERK_MULTIPLIER;
-     }
-     }
-     }
-     */
-#endif // __NEW_JERK
-
-    _calc_jerk_values(bf);
 
 	// finish up the current block variables
 	if (cm_get_path_control(MODEL) != PATH_EXACT_STOP) { 	// exact stop cases already zeroed
@@ -269,33 +170,128 @@ stat_t mp_aline(const GCodeState_t *gm_in)
 }
 
 /***** ALINE HELPERS *****
+ * _calc_move_times()
  * _plan_block_list()
- * _calculate_trapezoid()
- * _get_target_length()
- * _get_target_velocity()
  * _get_junction_vmax()
  * _reset_replannable_list()
  */
 
+/*
+ * _calc_move_times() - compute optimal and minimum move times into the gcode_state
+ *
+ *	"Minimum time" is the fastest the move can be performed given the velocity constraints on each 
+ *	participating axis - regardless of the feed rate requested. The minimum time is the time limited 
+ *	by the rate-limiting axis. The minimum time is needed to compute the optimal time and is 
+ *	recorded for possible feed override computation..
+ *
+ *	"Optimal time" is either the time resulting from the requested feed rate or the minimum time if 
+ *	the requested feed rate is not achievable. Optimal times for traverses are always the minimum time.
+ *
+ *	The gcode state must have targets set prior by having cm_set_target(). Axis modes are taken into 
+ *	account by this.
+ *
+ *	The following times are compared and the longest is returned:
+ *	  -	G93 inverse time (if G93 is active)
+ *	  -	time for coordinated move at requested feed rate
+ *	  -	time that the slowest axis would require for the move
+ *
+ *	Sets the following variables in the gcode_state struct
+ *	  - move_time is set to optimal time
+ *	  - minimum_time is set to minimum time
+ */
+/* --- NIST RS274NGC_v3 Guidance ---
+ *
+ *	The following is verbatim text from NIST RS274NGC_v3. As I interpret A for moves that 
+ *	combine both linear and rotational movement, the feed rate should apply to the XYZ 
+ *	movement, with the rotational axis (or axes) timed to start and end at the same time 
+ *	the linear move is performed. It is possible under this case for the rotational move 
+ *	to rate-limit the linear move.
+ *
+ * 	2.1.2.5 Feed Rate
+ *
+ *	The rate at which the controlled point or the axes move is nominally a steady rate 
+ *	which may be set by the user. In the Interpreter, the interpretation of the feed 
+ *	rate is as follows unless inverse time feed rate mode is being used in the 
+ *	RS274/NGC view (see Section 3.5.19). The canonical machining functions view of feed 
+ *	rate, as described in Section 4.3.5.1, has conditions under which the set feed rate 
+ *	is applied differently, but none of these is used in the Interpreter.
+ *
+ *	A. 	For motion involving one or more of the X, Y, and Z axes (with or without 
+ *		simultaneous rotational axis motion), the feed rate means length units per
+ *		minute along the programmed XYZ path, as if the rotational axes were not moving.
+ *
+ *	B.	For motion of one rotational axis with X, Y, and Z axes not moving, the 
+ *		feed rate means degrees per minute rotation of the rotational axis.
+ *
+ *	C.	For motion of two or three rotational axes with X, Y, and Z axes not moving, 
+ *		the rate is applied as follows. Let dA, dB, and dC be the angles in degrees 
+ *		through which the A, B, and C axes, respectively, must move. 
+ *		Let D = sqrt(dA^2 + dB^2 + dC^2). Conceptually, D is a measure of total 
+ *		angular motion, using the usual Euclidean metric. Let T be the amount of 
+ *		time required to move through D degrees at the current feed rate in degrees 
+ *		per minute. The rotational axes should be moved in coordinated linear motion 
+ *		so that the elapsed time from the start to the end of the motion is T plus 
+ *		any time required for acceleration or deceleration.
+ */
+static void _calc_move_times(GCodeState_t *gms, const float position[])	// gms = Gcode model state
+{
+	float inv_time=0;				// inverse time if doing a feed in G93 mode
+	float xyz_time=0;				// coordinated move linear part at req feed rate
+	float abc_time=0;				// coordinated move rotary part at req feed rate
+	float max_time=0;				// time required for the rate-limiting axis
+	float tmp_time=0;				// used in computation
+	gms->minimum_time = 8675309;	// arbitrarily large number
+
+	// compute times for feed motion
+	if (gms->motion_mode == MOTION_MODE_STRAIGHT_FEED) {
+		if (gms->feed_rate_mode == INVERSE_TIME_MODE) {
+			inv_time = gms->feed_rate;	// NB: feed rate was normalized to minutes by cm_set_feed_rate()
+			gms->feed_rate_mode = UNITS_PER_MINUTE_MODE;
+		} else {
+			xyz_time = sqrt(square(gms->target[AXIS_X] - position[AXIS_X]) +					// in millimeters
+							square(gms->target[AXIS_Y] - position[AXIS_Y]) +
+							square(gms->target[AXIS_Z] - position[AXIS_Z])) / gms->feed_rate;	// in linear units
+			if (fp_ZERO(xyz_time)) {
+				abc_time = sqrt(square(gms->target[AXIS_A] - position[AXIS_A]) +				// in degrees
+								square(gms->target[AXIS_B] - position[AXIS_B]) +
+								square(gms->target[AXIS_C] - position[AXIS_C])) / gms->feed_rate; // in rotary units
+			}
+		}
+	}
+	for (uint8_t axis = AXIS_X; axis < AXES; axis++) {
+		if (gms->motion_mode == MOTION_MODE_STRAIGHT_FEED) {
+			tmp_time = fabs(gms->target[axis] - position[axis]) / cm.a[axis].feedrate_max;
+		} else { // motion_mode == MOTION_MODE_STRAIGHT_TRAVERSE
+			tmp_time = fabs(gms->target[axis] - position[axis]) / cm.a[axis].velocity_max;
+		}
+		max_time = max(max_time, tmp_time);
+		// collect minimum time if not zero
+		if (tmp_time > 0) {
+			gms->minimum_time = min(gms->minimum_time, tmp_time);
+		}
+	}
+	gms->move_time = max4(inv_time, max_time, xyz_time, abc_time);
+}
+
 /* _plan_block_list() - plans the entire block list
  *
- *	The block list is the circular buffer of planner buffers (bf's). The block currently 
- *	being planned is the "bf" block. The "first block" is the next block to execute; 
- *	queued immediately behind the currently executing block, aka the "running" block. 
- *	In some cases there is no first block because the list is empty or there is only 
- *	one block and it is already running. 
+ *	The block list is the circular buffer of planner buffers (bf's). The block currently
+ *	being planned is the "bf" block. The "first block" is the next block to execute;
+ *	queued immediately behind the currently executing block, aka the "running" block.
+ *	In some cases there is no first block because the list is empty or there is only
+ *	one block and it is already running.
  *
  *	If blocks following the first block are already optimally planned (non replannable)
  *	the first block that is not optimally planned becomes the effective first block.
  *
- *	_plan_block_list() plans all blocks between and including the (effective) first block 
- *	and the bf. It sets entry, exit and cruise V's from Vmax's then calls trapezoid generation. 
+ *	_plan_block_list() plans all blocks between and including the (effective) first block
+ *	and the bf. It sets entry, exit and cruise v's from vmax's then calls trapezoid generation.
  *
  *	Variables that must be provided in the mpBuffers that will be processed:
  *
  *	  bf (function arg)		- end of block list (last block in time)
  *	  bf->replannable		- start of block list set by last FALSE value [Note 1]
- *	  bf->move_type			- typically MOVE_TYPE_ALINE. Other move_types should be set to 
+ *	  bf->move_type			- typically MOVE_TYPE_ALINE. Other move_types should be set to
  *							  length=0, entry_vmax=0 and exit_vmax=0 and are treated
  *							  as a momentary stop (plan to zero and from zero).
  *
@@ -357,32 +353,35 @@ static void _plan_block_list(mpBuf_t *bf, uint8_t *mr_flag)
 	}
 
 	// forward planning pass - recomputes trapezoids in the list from the first block to the bf block.
-	bp = mp_get_next_buffer(bp);
-	while (bp != bf) {
+	while ((bp = mp_get_next_buffer(bp)) != bf) {
 		if ((bp->pv == bf) || (*mr_flag == true))  {
 			bp->entry_velocity = bp->entry_vmax;		// first block in the list
 			*mr_flag = false;
-        } else {
+		} else {
 			bp->entry_velocity = bp->pv->exit_velocity;	// other blocks in the list
 		}
 		bp->cruise_velocity = bp->cruise_vmax;
 		bp->exit_velocity = min4( bp->exit_vmax,
-                                 bp->nx->entry_vmax,
-                                 bp->nx->braking_velocity,
-                                 (bp->entry_velocity + bp->delta_vmax) );
+								  bp->nx->entry_vmax,
+								  bp->nx->braking_velocity,
+								 (bp->entry_velocity + bp->delta_vmax) );
 
 		mp_calculate_trapezoid(bp);
 
 		// test for optimally planned trapezoids - only need to check various exit conditions
+/*
+		if ((bp->exit_velocity == bp->exit_vmax) || (bp->exit_velocity == bp->nx->entry_vmax) ||
+		   ((bp->pv->replannable == false) && (bp->exit_velocity == bp->entry_velocity + bp->delta_vmax))) {
+			bp->replannable = false;
+		}
+*/
 		if  ( ( (fp_EQ(bp->exit_velocity, bp->exit_vmax)) ||
-               (fp_EQ(bp->exit_velocity, bp->nx->entry_vmax)) )  ||
-             ( (bp->pv->replannable == false) &&
-              (fp_EQ(bp->exit_velocity, (bp->entry_velocity + bp->delta_vmax))) ) ) {
-                 bp->replannable = false;
-             }
-		bp = mp_get_next_buffer(bp);
+				(fp_EQ(bp->exit_velocity, bp->nx->entry_vmax)) ) ||
+			  ( (bp->pv->replannable == false) &&
+				(fp_EQ(bp->exit_velocity, (bp->entry_velocity + bp->delta_vmax))) ) ) {
+			bp->replannable = false;
+		}
 	}
-    
 	// finish up the last block move
 	bp->entry_velocity = bp->pv->exit_velocity;
 	bp->cruise_velocity = bp->cruise_vmax;
@@ -396,7 +395,7 @@ static void _plan_block_list(mpBuf_t *bf, uint8_t *mr_flag)
 static void _reset_replannable_list()
 {
 	mpBuf_t *bf = mp_get_first_buffer();
-	if (bf == NULL) { return;}
+	if (bf == NULL) return;
 	mpBuf_t *bp = bf;
 	do {
 		bp->replannable = true;
@@ -404,11 +403,11 @@ static void _reset_replannable_list()
 }
 
 /*
- * _get_junction_vmax() - Chamnit's algorithm - simple
+ * _get_junction_vmax() - Sonny's algorithm - simple
  *
  *  Computes the maximum allowable junction speed by finding the velocity that will yield 
  *	the centripetal acceleration in the corner_acceleration value. The value of delta sets 
- *	the effective radius of curvature. Here's Chamnit's (Sungeun K. Jeon's) explanation 
+ *	the effective radius of curvature. Here's Sonny's (Sungeun K. Jeon's) explanation 
  *	of what's going on:
  *
  *	"First let's assume that at a junction we only look a centripetal acceleration to simply 
@@ -416,13 +415,16 @@ static void _reset_replannable_list()
  *	to the circle. The circular segment joining the lines represents the path for constant 
  *	centripetal acceleration. This creates a deviation from the path (let's call this delta), 
  *	which is the distance from the junction to the edge of the circular segment. Delta needs 
- *	to be defined, so let's replace the term max_jerk with max_junction_deviation( or delta). 
- *	This indirectly sets the radius of the circle, and hence limits the velocity by the 
- *	centripetal acceleration. Think of the this as widening the race track. If a race car is 
- *	driving on a track only as wide as a car, it'll have to slow down a lot to turn corners. 
- *	If we widen the track a bit, the car can start to use the track to go into the turn. 
- *	The wider it is, the faster through the corner it can go.
+ *	to be defined, so let's replace the term max_jerk (see note 1) with max_junction_deviation, 
+ *	or "delta". This indirectly sets the radius of the circle, and hence limits the velocity 
+ *	by the centripetal acceleration. Think of the this as widening the race track. If a race 
+ *	car is driving on a track only as wide as a car, it'll have to slow down a lot to turn 
+ *	corners. If we widen the track a bit, the car can start to use the track to go into the 
+ *	turn. The wider it is, the faster through the corner it can go.
  *
+ * (Note 1: "max_jerk" refers to the old grbl/marlin max_jerk" approximation term, not the 
+ *	tinyG jerk terms)
+ * 
  *	If you do the geometry in terms of the known variables, you get:
  *		sin(theta/2) = R/(R+delta)  Re-arranging in terms of circle radius (R)
  *		R = delta*sin(theta/2)/(1-sin(theta/2). 
@@ -442,9 +444,9 @@ static void _reset_replannable_list()
  *		float theta = acos(costheta);
  *		float radius = delta * sin(theta/2)/(1-sin(theta/2));
  */
-/*  This version function extends Chamnit's algorithm by computing a value for delta that 
- *	takes the contributions of the individual axes in the move into account. This allows 
- *	the control radius to vary by axis. This is necessary to support axes that have 
+/*  This version extends Chamnit's algorithm by computing a value for delta that takes
+ *	the contributions of the individual axes in the move into account. This allows the
+ *	control radius to vary by axis. This is necessary to support axes that have 
  *	different dynamics; such as a Z axis that doesn't move as fast as X and Y (such as a 
  *	screw driven Z axis on machine with a belt driven XY - like a Shapeoko), or rotary 
  *	axes ABC that have completely different dynamics than their linear counterparts.
@@ -457,11 +459,15 @@ static void _reset_replannable_list()
  *	 	Usum	Length of sums			Ux + Uy
  *	 	d		Delta of sums			(Dx*Ux+DY*UY)/Usum
  */
+
 static float _get_junction_vmax(const float a_unit[], const float b_unit[])
 {
-	float costheta = - (a_unit[AXIS_X] * b_unit[AXIS_X]) - (a_unit[AXIS_Y] * b_unit[AXIS_Y]) 
-					 - (a_unit[AXIS_Z] * b_unit[AXIS_Z]) - (a_unit[AXIS_A] * b_unit[AXIS_A]) 
-					 - (a_unit[AXIS_B] * b_unit[AXIS_B]) - (a_unit[AXIS_C] * b_unit[AXIS_C]);
+	float costheta = - (a_unit[AXIS_X] * b_unit[AXIS_X])
+					 - (a_unit[AXIS_Y] * b_unit[AXIS_Y])
+					 - (a_unit[AXIS_Z] * b_unit[AXIS_Z])
+					 - (a_unit[AXIS_A] * b_unit[AXIS_A])
+					 - (a_unit[AXIS_B] * b_unit[AXIS_B])
+					 - (a_unit[AXIS_C] * b_unit[AXIS_C]);
 
 	if (costheta < -0.99) { return (10000000); } 		// straight line cases
 	if (costheta > 0.99)  { return (0); } 				// reversal cases
@@ -545,8 +551,12 @@ static float _get_junction_vmax(const float a_unit[], const float b_unit[])
 
 static float _compute_next_segment_velocity()
 {
-	if (mr.section == SECTION_BODY) { return (mr.segment_velocity);}
+	if (mr.section == SECTION_BODY) return (mr.segment_velocity);
+#ifdef __JERK_EXEC
+	return (mr.segment_velocity);	// an approximation
+#else
 	return (mr.segment_velocity + mr.forward_diff_5);
+#endif
 }
 
 stat_t mp_plan_hold_callback()
@@ -748,28 +758,28 @@ static void _test_get_target_length()
 
 	Vi = 0;
 	Vt = 300;
-	L = _get_target_length(Vi, Vt, bf);		// result: L = 3.872983
-	Vt = _get_target_velocity(Vi, L, bf);	// result: Vt = 300
+	L = mp_get_target_length(Vi, Vt, bf);		// result: L = 3.872983
+	Vt = mp_get_target_velocity(Vi, L, bf);	// result: Vt = 300
 
 	Vi = 165;
 	Vt = 300;
-	L = _get_target_length(Vi, Vt, bf);		// result: L = 4.027018
-	Vt = _get_target_velocity(Vi, L, bf);	// result: Vt = 300
+	L = mp_get_target_length(Vi, Vt, bf);		// result: L = 4.027018
+	Vt = mp_get_target_velocity(Vi, L, bf);	// result: Vt = 300
 
 	Vi = 523;
 	Vt = 600;
-	L = _get_target_length(Vi, Vt, bf);		// result: L = 7.344950
-	Vt = _get_target_velocity(Vi, L, bf);	// result: Vt = 600
+	L = mp_get_target_length(Vi, Vt, bf);		// result: L = 7.344950
+	Vt = mp_get_target_velocity(Vi, L, bf);	// result: Vt = 600
 
 	Vi = 200;
 	Vt = 400;
-	L = _get_target_length(Vi, Vt, bf);		// result: L = 6.324555
-	Vt = _get_target_velocity(Vi, L, bf);	// result: Vt = 400
+	L = mp_get_target_length(Vi, Vt, bf);		// result: L = 6.324555
+	Vt = mp_get_target_velocity(Vi, L, bf);	// result: Vt = 400
 
 	Vi = 174;
 	Vt = 347;
-	L = _get_target_length(Vi, Vt, bf);		// result: L = 5.107690
-	Vt = _get_target_velocity(Vi, L, bf);	// result: Vt = 347
+	L = mp_get_target_length(Vi, Vt, bf);		// result: L = 5.107690
+	Vt = mp_get_target_velocity(Vi, L, bf);	// result: Vt = 347
 }
 #endif	// __TEST_GET_TARGET_LENGTH
 
@@ -788,7 +798,7 @@ static void _test_get_target_velocity()
 	float Vt; 			// 300
 	bf->jerk = 1800000;
 
-	Vt = _get_target_velocity(Vi, L, bf);
+	Vt = mp_get_target_velocity(Vi, L, bf);
 }
 #endif	// __TEST_GET_TARGET_VELOCITY
 
@@ -824,7 +834,7 @@ static void _test_trapezoid(float length, float Ve, float Vt, float Vx, mpBuf_t 
 	bf->jerk = JERK_TEST_VALUE;
 	bf->recip_jerk = 1/bf->jerk;
 	bf->cbrt_jerk = cbrt(bf->jerk);
-	_calculate_trapezoid(bf);
+	mp_calculate_trapezoid(bf);
 }
 
 static void _test_calculate_trapezoid()

@@ -2,7 +2,7 @@
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectVersion>6.1</ProjectVersion>
+    <ProjectVersion>6.2</ProjectVersion>
     <ToolchainName>com.Atmel.ARMGCC.CPP</ToolchainName>
     <ProjectGuid>{44ea8fec-55d7-4149-8a78-a574fc26bf51}</ProjectGuid>
     <avrdevice>ATSAM3X8C</avrdevice>
@@ -21,12 +21,12 @@
     <OverrideVtorValue>exception_table</OverrideVtorValue>
     <eraseonlaunchrule>1</eraseonlaunchrule>
     <AsfVersion>3.5.0</AsfVersion>
-    <avrtoolinterface>JTAG</avrtoolinterface>
-    <avrtool>com.atmel.avrdbg.tool.samice</avrtool>
+    <avrtoolinterface>SWD</avrtoolinterface>
+    <avrtool>com.atmel.avrdbg.tool.atmelice</avrtool>
     <com_atmel_avrdbg_tool_samice>
       <ToolType>com.atmel.avrdbg.tool.samice</ToolType>
       <ToolName>SAM-ICE</ToolName>
-      <ToolNumber>000028011884</ToolNumber>
+      <ToolNumber>000028016452</ToolNumber>
       <Channel>
         <host>127.0.0.1</host>
         <port>1063</port>
@@ -49,21 +49,33 @@
     </com_atmel_avrdbg_tool_samice>
     <AsfFrameworkConfig>
       <framework-data>
-  <options />
-  <configurations />
-  <files />
-  <documentation help="" />
-  <offline-documentation help="" />
-  <dependencies>
-    <content-extension eid="atmel.asf" uuidref="Atmel.ASF" version="3.6.0" />
-  </dependencies>
-</framework-data>
+        <options />
+        <configurations />
+        <files />
+        <documentation help="" />
+        <offline-documentation help="" />
+        <dependencies>
+          <content-extension eid="atmel.asf" uuidref="Atmel.ASF" version="3.6.0" />
+        </dependencies>
+      </framework-data>
     </AsfFrameworkConfig>
     <CacheFlash>true</CacheFlash>
     <ProgFlashFromRam>true</ProgFlashFromRam>
     <RamSnippetAddress>0x20000000</RamSnippetAddress>
     <UncachedRange />
     <BootSegment>0</BootSegment>
+    <com_atmel_avrdbg_tool_atmelice>
+      <ToolOptions>
+        <InterfaceProperties>
+          <SwdClock>2000000</SwdClock>
+        </InterfaceProperties>
+        <InterfaceName>SWD</InterfaceName>
+      </ToolOptions>
+      <ToolType>com.atmel.avrdbg.tool.atmelice</ToolType>
+      <ToolNumber>J41800005101</ToolNumber>
+      <ToolName>Atmel-ICE</ToolName>
+    </com_atmel_avrdbg_tool_atmelice>
+    <UseGdb>False</UseGdb>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <UsesExternalMakeFile>True</UsesExternalMakeFile>
@@ -850,6 +862,9 @@
     <Compile Include="plan_line.cpp">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="plan_zoid.cpp">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="platform\atmel_sam\board\due\gShield-pinout.h">
       <SubType>compile</SubType>
     </Compile>
@@ -1105,6 +1120,9 @@
     <Compile Include="settings\settings_Ultimaker.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="settings\settings_Ultimaker_Rob_v9h.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="settings\settings_zen7x12.h">
       <SubType>compile</SubType>
     </Compile>
@@ -1130,6 +1148,63 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="switch.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="test.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="test.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_001_smoke.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_002_homing.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_003_squares.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_004_arcs.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_005_dwell.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_006_feedhold.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_007_Mcodes.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_008_json.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_009_inverse_time.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_010_rotary.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_011_small_moves.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_012_slow_moves.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_013_coordinate_offsets.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_014_microsteps.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_050_mudflap.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_051_braid.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="tests\test_099.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="text_parser.cpp">
@@ -1162,6 +1237,7 @@
     <Folder Include="arduino" />
     <Folder Include="motate" />
     <Folder Include="motate\utility" />
+    <Folder Include="tests" />
     <Folder Include="platform\atmel_sam\board\" />
     <Folder Include="platform\atmel_sam\board\due\" />
     <Folder Include="platform\atmel_sam\board\v9_3x8c\" />
