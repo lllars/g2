@@ -415,9 +415,12 @@ namespace Motate {
                     uint8_t _old_line_state = _line_state;
                     _line_state = setup.valueLow();
 
-                    // If the RTS changed, call connectionStateChanged (if it's defined)
-                    if (connection_state_changed_callback && ((_old_line_state & (0x01 << 1)) != (_line_state & (0x01 << 1)))) {
-                        connection_state_changed_callback(_line_state & (0x01 << 1));
+                    // TODO -- make this a global enum type:
+                    static const uint8_t DTR_MASK = (0x01 << 0);
+
+                    // If the DTR changed, call connectionStateChanged (if it's defined)
+                    if (connection_state_changed_callback && ((_old_line_state & DTR_MASK) != (_line_state & DTR_MASK))) {
+                        connection_state_changed_callback(_line_state & DTR_MASK);
                     }
 
                     // Auto-reset into the bootloader is triggered when the port, already open at 1200 bps, is closed.
@@ -454,15 +457,15 @@ namespace Motate {
             }
             else if (endpoint == read_endpoint)
             {
-                uint16_t ep_size = Motate::getEndpointSize(read_endpoint, kEndpointTypeBulk, deviceSpeed, otherSpeed, limitedSize ? 128 : 512);
+                uint16_t ep_size = Motate::getEndpointSize(read_endpoint, kEndpointTypeBulk, deviceSpeed, otherSpeed, limitedSize);
                 const EndpointBufferSettings_t _buffer_size = getBufferSizeFlags(ep_size);
-                return kEndpointBufferOutputFromHost | _buffer_size | kEndpointBufferBlocksUpTo2 | kEndpointBufferTypeBulk;
+                return kEndpointBufferOutputFromHost | _buffer_size | kEndpointBufferBlocks1 | kEndpointBufferTypeBulk;
             }
             else if (endpoint == write_endpoint)
             {
-                uint16_t ep_size = Motate::getEndpointSize(write_endpoint, kEndpointTypeBulk, deviceSpeed, otherSpeed, limitedSize ? 128 : 512);
+                uint16_t ep_size = Motate::getEndpointSize(write_endpoint, kEndpointTypeBulk, deviceSpeed, otherSpeed, limitedSize);
                 const EndpointBufferSettings_t _buffer_size = getBufferSizeFlags(ep_size);
-                return kEndpointBufferInputToHost | _buffer_size | kEndpointBufferBlocksUpTo2 | kEndpointBufferTypeBulk;
+                return kEndpointBufferInputToHost | _buffer_size | kEndpointBufferBlocks1 | kEndpointBufferTypeBulk;
             }
             return kEndpointBufferNull;
         };
@@ -470,15 +473,15 @@ namespace Motate {
         uint16_t getEndpointSize(const uint8_t &endpoint, const USBDeviceSpeed_t deviceSpeed, const bool otherSpeed, const bool limitedSize) {
             if (endpoint == control_endpoint)
             {
-                return Motate::getEndpointSize(control_endpoint, kEndpointTypeInterrupt, deviceSpeed, otherSpeed, limitedSize ? 128 : 512);
+                return Motate::getEndpointSize(control_endpoint, kEndpointTypeInterrupt, deviceSpeed, otherSpeed, limitedSize);
             }
             else if (endpoint == read_endpoint)
             {
-                return Motate::getEndpointSize(read_endpoint, kEndpointTypeBulk, deviceSpeed, otherSpeed, limitedSize ? 128 : 512);
+                return Motate::getEndpointSize(read_endpoint, kEndpointTypeBulk, deviceSpeed, otherSpeed, limitedSize);
             }
             else if (endpoint == write_endpoint)
             {
-                return Motate::getEndpointSize(write_endpoint, kEndpointTypeBulk, deviceSpeed, otherSpeed, limitedSize ? 128 : 512);
+                return Motate::getEndpointSize(write_endpoint, kEndpointTypeBulk, deviceSpeed, otherSpeed, limitedSize);
             }
             return 0;
         };
@@ -801,7 +804,7 @@ namespace Motate {
         const USBDescriptorEndpoint_t CDC_DataOutEndpoint;
         const USBDescriptorEndpoint_t CDC_DataInEndpoint;
         
-        USBConfigMixinMultiple_t (const uint8_t _first_endpoint_number, const uint8_t _first_interface_number, const USBDeviceSpeed_t _deviceSpeed, const bool _other_speed)
+        USBConfigMixinMultiple_t (const uint8_t _first_endpoint_number, const uint8_t _first_interface_number, const USBDeviceSpeed_t _deviceSpeed, const bool _other_speed, const bool _limited_size = false)
         : CDC_IAD (
                    /* _FirstInterfaceIndex = */ _first_interface_number,
                    /* _TotalInterfaces     = */ 2,
@@ -851,7 +854,8 @@ namespace Motate {
                             /* _input             = */ false,
                             /* _EndpointAddress   = */ _first_endpoint_number+1,
                             /* _Attributes        = */ (kEndpointTypeBulk | kEndpointAttrNoSync | kEndpointUsageData),
-                            /* _PollingIntervalMS = */ 0x01
+                            /* _PollingIntervalMS = */ 0x01,
+                            /* _limited_size      = */ _limited_size
                             ),
         CDC_DataInEndpoint(
                            /* _deviceSpeed       = */ _deviceSpeed,
@@ -859,7 +863,8 @@ namespace Motate {
                            /* _input             = */ true,
                            /* _EndpointAddress   = */ _first_endpoint_number+2,
                            /* _Attributes        = */ (kEndpointTypeBulk | kEndpointAttrNoSync | kEndpointUsageData),
-                           /* _PollingIntervalMS = */ 0x01
+                           /* _PollingIntervalMS = */ 0x01,
+                           /* _limited_size      = */ _limited_size
                            )
         {};
         
@@ -891,20 +896,18 @@ namespace Motate {
     };
     
     // CDC is the first and second interface...
-    //	 template < typename usbIFC >
-    //	 struct USBConfigMixin < USBCDC, USBCDC, usbIFC, 0> : USBConfigMixinMultiple_t {
-    //		 USBConfigMixin(const uint8_t _first_endpoint_number, const uint8_t _first_interface_number, const bool _other_speed) :
-    //		 USBConfigMixinMultiple_t(_first_endpoint_number, _first_interface_number, _other_speed)
-    //		{};
-    //	 };
-    // // CDC is the second and third interface...
-    // template < typename usbIFA >
-    // struct USBConfigMixin < usbIFA, USBCDC, USBCDC > : USBConfigMixinMultiple_t {
-    // 	USBConfigMixin(const uint8_t _first_endpoint_number, const uint8_t _first_interface_number) :
-    // 	USBConfigMixinMultiple_t(_first_endpoint_number, _first_interface_number)
-    // 	{};
-    // };
-    
+    template < typename usbIFC >
+    struct USBConfigMixin < USBCDC, USBCDC, usbIFC, 0> : USBConfigMixinMultiple_t {
+        USBConfigMixin(const uint8_t _first_endpoint_number, const uint8_t _first_interface_number, const USBDeviceSpeed_t _deviceSpeed, const bool _other_speed) :
+        USBConfigMixinMultiple_t(_first_endpoint_number, _first_interface_number, _deviceSpeed, _other_speed, /*_limited_size*/ true)
+		{};
+    };
+    template < typename usbIFC >
+    struct USBConfigMixin < USBCDC, USBCDC, usbIFC, 1> : USBConfigMixinMultiple_t {
+        USBConfigMixin(const uint8_t _first_endpoint_number, const uint8_t _first_interface_number, const USBDeviceSpeed_t _deviceSpeed, const bool _other_speed) :
+        USBConfigMixinMultiple_t(_first_endpoint_number, _first_interface_number, _deviceSpeed, _other_speed, /*_limited_size*/ true)
+		{};
+    };
 }
 
 #endif

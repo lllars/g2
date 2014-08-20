@@ -92,6 +92,7 @@ void controller_init(uint8_t std_in, uint8_t std_out, uint8_t std_err)
 
 #ifdef __AVR
 	cs.state = CONTROLLER_STARTUP;					// ready to run startup lines
+	state_usb0 = CONTROLLER_NOT_CONNECTED
 	xio_set_stdin(std_in);
 	xio_set_stdout(std_out);
 	xio_set_stderr(std_err);
@@ -201,46 +202,33 @@ static void _controller_HSM()
 static stat_t _command_dispatch()
 {
 #ifdef __AVR
-	stat_t status;
+	devflags_t flags;
 
-	// read input line or return if not a completed line
-	// xio_gets() is a non-blocking workalike of fgets()
-	while (true) {
-		if ((status = xio_gets(cs.primary_src, cs.in_buf, sizeof(cs.in_buf))) == STAT_OK) {
-			cs.bufp = cs.in_buf;
-			cs.linelen = strlen(cs.in_buf)+1;			// linelen only tracks primary input
-			break;
-		}
-		// handle end-of-file from file devices
-		if (status == STAT_EOF) {						// EOF can come from file devices only
-			if (cfg.comm_mode == TEXT_MODE) {
-				fprintf_P(stderr, PSTR("End of command file\n"));
-			} else {
-				rpt_exception(STAT_EOF);				// not really an exception
-			}
-			tg_reset_source();							// reset to default source
-		}
-		return (status);								// Note: STAT_EAGAIN, errors, etc. will drop through
+	if ((cs.bufp = readline(&flags, &cs.linelen)) == NULL) {
+		return (STAT_OK);									// nothing to process yet
 	}
-
 #endif // __AVR
+
+//#define __DUAL_USB
 #ifdef __ARM
 	// detect USB connection and transition to disconnected state if it disconnected
 //	if (SerialUSB.isConnected() == false) cs.state = CONTROLLER_NOT_CONNECTED;
 
+//#define __DUAL_USB 1
+#ifdef __DUAL_USB
 	devflags_t device_flags = DEV_IS_BOTH;
 
 	// read input line and return if not a completed line
 	if ((cs.bufp = readline(device_flags, cs.linelen)) == NULL) {
 		return (STAT_OK);									// nothing to process yet
 	}
-/*
+#else
 	if (cs.state_usb0 == CONTROLLER_READY) {
 		if (read_line(cs.in_buf, &cs.read_index, sizeof(cs.in_buf)) != STAT_OK) {
 			cs.bufp = cs.in_buf;
 			return (STAT_OK);	// This is an exception: returns OK for anything NOT OK, so the idler always runs
 		}
-	} else if (cs.state_usb0 == CONTROLLER_NOT_CONNECTED) {
+	} else if (cs.state_usb0 <= CONTROLLER_NOT_CONNECTED) {
 		if (SerialUSB.isConnected() == false) return (STAT_OK);
 		cm_request_queue_flush();
 		rpt_print_system_ready_message();
@@ -253,12 +241,13 @@ static stat_t _command_dispatch()
 		return (STAT_OK);
 	}
 	cs.read_index = 0;
-*/
+#endif	// __DUAL_USB
 #endif // __ARM
 
 	// set up the buffers
-//	cs.linelen = strlen(cs.in_buf)+1;					// linelen only tracks primary input
-	strncpy(cs.saved_buf, cs.bufp, SAVED_BUFFER_LEN-1);	// save input buffer for reporting purposes
+	cs.linelen = strlen(cs.bufp)+1;						// linelen only tracks primary input
+	strncpy(cs.saved_buf, cs.bufp, SAVED_BUFFER_LEN-1);	// save input buffer for reporting
+//	strncpy(cs.saved_buf, cs.bufp, INPUT_BUFFER_LEN-1);	// save input buffer for reporting
 
 	// dispatch the new text line
 	switch (toupper(*cs.bufp)) {						// first char
@@ -271,7 +260,7 @@ static stat_t _command_dispatch()
 			if (cfg.comm_mode != JSON_MODE) {
 				text_response(STAT_OK, cs.saved_buf);
 			}
-		break;
+			break;
 		}
 		case '$': case '?': case 'H': { 				// text mode input
 			cfg.comm_mode = TEXT_MODE;
