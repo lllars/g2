@@ -398,6 +398,8 @@ void mp_commit_write_buffer(const uint8_t move_type)
         }
     } else {
         mb.needs_replanned = 1;
+        if(cm.hold_state == FEEDHOLD_OFF || cm.hold_state == FEEDHOLD_END_HOLD)
+            cm_set_motion_state(MOTION_PLANNING);
         mb.q = mb.q->nx;							// advance the queued buffer pointer
         if (mb.planner_timer == 0) {
             mb.planner_timer = SysTickTimer.getValue() + PLANNER_TIMEOUT_MS;
@@ -462,8 +464,13 @@ stat_t mp_plan_buffer()
 }
 
 bool mp_is_it_phat_city_time() {
+	if(cm.hold_state == FEEDHOLD_HOLD) {
+		return true;
+	}
+	
+    mp_planner_time_accounting();
     float time_in_planner = mb.time_in_run + mb.time_in_planner;
-    return (fp_ZERO(time_in_planner) || PHAT_CITY_TIME < time_in_planner);
+    return ((time_in_planner <= 0) || (PHAT_CITY_TIME < time_in_planner));
 }
 
 void mp_planner_time_accounting() {
@@ -473,10 +480,12 @@ void mp_planner_time_accounting() {
     mpBuf_t *bf = mp_get_run_buffer();
     mpBuf_t *bp = bf;
 
-    if (bf == NULL)
-        return;
-
     float time_in_planner = mb.time_in_run; // start with how much time is left in the runtime
+
+    if (bf == NULL) {
+        mb.time_in_planner = time_in_planner;
+        return;
+    }
 
     while ((bp = mp_get_next_buffer(bp)) != bf && bp != mb.q) {
         if ((bp->buffer_state == MP_BUFFER_QUEUED) ||
