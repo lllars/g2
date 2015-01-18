@@ -221,7 +221,7 @@ stat_t mp_exec_aline(mpBuf_t *bf)
             // Update the mb times -- we can "guess" quite accurately but we still need a full 
 			// re-accounting to handle the locking.
             mb.needs_time_accounting = true;
-            //mb.time_in_planner -= bf->real_move_time;
+            //mb.time_in_planner -= bf->real_move_time_usec;
             mb.time_in_run = bf->real_move_time;
 
             mr.section = SECTION_HEAD;

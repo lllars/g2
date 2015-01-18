@@ -48,20 +48,26 @@
 // new machines use a stepper which has the same config as the other axis.
 #define HAS_CANSTACK_Z_AXIS 0
 
-// Switch definitions for interlock & E-stop
-#define ENABLE_INTERLOCK_AND_ESTOP
-#define INTERLOCK_SWITCH_AXIS           AXIS_Y
-#define INTERLOCK_SWITCH_POSITION       SW_MAX
-#define ESTOP_SWITCH_AXIS               AXIS_X
-#define ESTOP_SWITCH_POSITION           SW_MAX
-#undef PAUSE_DWELL_TIME
-#define PAUSE_DWELL_TIME				1.5 //after unpausing and turning the spindle on, dwell for 1.5s
-
 // *** settings.h overrides ***
 // Note: there are some commented test values below
 
+// Switch definitions for interlock & E-stop
+
+#undef INTERLOCK_SWITCH_AXIS
+#undef INTERLOCK_SWITCH_POSITION
+#undef ESTOP_SWITCH_AXIS
+#undef ESTOP_SWITCH_POSITION
+
+#define INTERLOCK_SWITCH_AXIS		AXIS_Y
+#define INTERLOCK_SWITCH_POSITION	SW_MAX
+#define ESTOP_SWITCH_AXIS			AXIS_X
+#define ESTOP_SWITCH_POSITION		SW_MAX
+
+#undef PAUSE_DWELL_TIME
+#define PAUSE_DWELL_TIME			1.5 //after unpausing and turning the spindle on, dwell for 1.5s
+
 #undef MOTOR_POWER_MODE
-#define MOTOR_POWER_MODE MOTOR_POWERED_IN_CYCLE
+#define MOTOR_POWER_MODE			MOTOR_POWERED_IN_CYCLE
 
 #undef  STATUS_REPORT_DEFAULTS
 #define STATUS_REPORT_DEFAULTS  "mpox","mpoy","mpoz","ofsx","ofsy","ofsz","g55x","g55y","g55z","unit","stat","coor","momo","dist","home","mots","plan","line","path","frmo","prbe","ilck","estp","spc"

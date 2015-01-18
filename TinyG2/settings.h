@@ -49,6 +49,13 @@
 #define MOTOR_POWER_LEVEL			0.375					// default motor power level 0.00 - 1.00 (ARM only)
 #define PAUSE_DWELL_TIME			0.0
 
+// Definitions for interlock & E-stop
+//#define ENABLE_INTERLOCK_AND_ESTOP						// uncomment to enable interlock and estop
+#define INTERLOCK_SWITCH_AXIS		AXIS_A					// assign Amin to interlock
+#define INTERLOCK_SWITCH_POSITION	SW_MIN
+#define ESTOP_SWITCH_AXIS			AXIS_A					// assign Amax to eStop
+#define ESTOP_SWITCH_POSITION		SW_MAX
+
 // Communications and reporting settings
 #define COMM_MODE					JSON_MODE				// one of: TEXT_MODE, JSON_MODE
 #define TEXT_VERBOSITY				TV_VERBOSE				// one of: TV_SILENT, TV_VERBOSE
@@ -109,7 +116,6 @@
 #include SETTINGS_FILE_PATH
 #else
 #include "settings/settings_default.h"				// Default settings for release
-#endif
 
 //#include "settings/settings_test.h"					// Settings for testing - not for release
 //#include "settings/settings_hammer.h"					// Hammer torque demo
@@ -124,6 +130,8 @@
 
 //#include "settings/settings_Ultimaker.h"
 //#include "settings/settings_Ultimaker_Rob_v9h.h"
+
+#endif
 
 /*** Handle optional modules that may not be in every machine ***/
 

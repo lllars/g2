@@ -95,18 +95,17 @@ void controller_init(uint8_t std_in, uint8_t std_out, uint8_t std_err)
 	cs.config_version = TINYG_CONFIG_VERSION;
 	cs.hw_platform = TINYG_HARDWARE_PLATFORM;		// NB: HW version is set from EEPROM
 
-	cs.controller_state = CONTROLLER_STARTUP;		// ready to run startup lines
-
 #ifdef __AVR
 	xio_set_stdin(std_in);
 	xio_set_stdout(std_out);
 	xio_set_stderr(std_err);
 	xio.default_src = std_in;
 	controller_set_primary_source(xio.default_src);
+	cs.controller_state = CONTROLLER_NOT_READY;		// ready for commands
 #endif
-
 #ifdef __ARM
 	IndicatorLed.setFrequency(100000);
+	cs.controller_state = CONTROLLER_NOT_CONNECTED;	// initialized but not connected to USB
 #endif
 }
 
@@ -211,19 +210,18 @@ static void _controller_HSM()
 
 static stat_t _controller_state()
 {
-	if (cs.controller_state == CONTROLLER_CONNECTED) {		// first time through after reset
+	if (cs.controller_state == CONTROLLER_CONNECTED) {	// first time through after reset
 		cs.controller_state = CONTROLLER_READY;
 		cm_request_queue_flush();
-		// Oops, we just skipped CONTROLLER_STARTUP. Do we still need it? -r
+		// Oops, we just skipped CONTROLLER_STARTUP. Do we still need it? -r ++++++
 		rpt_print_system_ready_message();
 	}
-
 	return (STAT_OK);
 }
 
 /*****************************************************************************************
- * controller_set_connected(bool) - hook for the xio system to tell the controller tha we
- * have/don't have a connection.
+ * controller_set_connected(bool) - hook for the xio system to tell the controller that 
+ * we have / don't-have a connection.
  */
 
 void controller_set_connected(bool is_connected) {
@@ -240,7 +238,7 @@ void controller_set_connected(bool is_connected) {
  * command dispatchers
  * _dispatch_command - entry point for control and data dispatches
  * _dispatch_control - entry point for control-only dispatches
- * _dispatch_kernel - core dispatch routines
+ * _dispatch_kernel  - core dispatch routines
  *
  *	Reads next command line and dispatches to relevant parser or action
  */
@@ -300,17 +298,20 @@ static void _dispatch_kernel()
 		text_response(gc_gcode_parser(cs.bufp), cs.saved_buf);
 
 	} else {
-		strncpy(cs.out_buf, cs.bufp, (USB_LINE_BUFFER_SIZE-11));	// use out_buf as temp; '-11' is buffer for JSON chars
+		// use out_buf as temp; '-11' is buffer for JSON chars
+		strncpy(cs.out_buf, cs.bufp, (USB_LINE_BUFFER_SIZE-11));
 		sprintf((char *)cs.bufp,"{\"gc\":\"%s\"}\n", (char *)cs.out_buf);
 		json_parser(cs.bufp);
 	}
 }
 
 static stat_t _check_for_phat_city_time(void) {
-    if (mp_is_it_phat_city_time()) {
-        return STAT_OK;
-    }
-    return STAT_EAGAIN;
+//    if (mp_is_it_phat_city_time()) {
+//        return STAT_OK;
+//    }
+//    return STAT_EAGAIN;
+
+    return ((mp_is_it_phat_city_time()) ? STAT_OK : STAT_EAGAIN);
 }
 
 /**** Local Utilities ********************************************************/
@@ -400,38 +401,28 @@ void controller_set_secondary_source(uint8_t dev) { xio.secondary_src = dev;}
 */
 /*
  * _sync_to_tx_buffer() - return eagain if TX queue is backed up
- * _sync_to_planner() - return eagain if planner is not ready for a new command
- * _sync_to_time() - return eagain if planner is not ready for a new command
+ * _sync_to_planner()	- return eagain if planner is not ready for a new command
  */
 
 static stat_t _sync_to_tx_buffer()
 {
-//	if ((xio_get_tx_bufcount_usart(ds[XIO_DEV_USB].x) >= XOFF_TX_LO_WATER_MARK)) {
-//		return (STAT_EAGAIN);
-//	}
+#ifdef __AVR
+	if ((xio_get_tx_bufcount_usart(ds[XIO_DEV_USB].x) >= XOFF_TX_LO_WATER_MARK)) {
+		return (STAT_EAGAIN);
+	}
+#endif
+	// no TX sync implemented on ARM USB
 	return (STAT_OK);
 }
 
 static stat_t _sync_to_planner()
 {
-	if (mp_get_planner_buffers_available() < PLANNER_BUFFER_HEADROOM) { // allow up to N planner buffers for this line
+	// allow up to N planner buffers for this line
+	if (mp_get_planner_buffers_available() < PLANNER_BUFFER_HEADROOM) { 
 		return (STAT_EAGAIN);
 	}
 	return (STAT_OK);
 }
-/*
-static stat_t _sync_to_time()
-{
-	if (cs.sync_to_time_time == 0) {		// initial pass
-		cs.sync_to_time_time = SysTickTimer_getValue() + 100; //ms
-		return (STAT_OK);
-	}
-	if (SysTickTimer_getValue() < cs.sync_to_time_time) {
-		return (STAT_EAGAIN);
-	}
-	return (STAT_OK);
-}
-*/
 
 /*
  * _limit_switch_handler() - shut down system if limit switch fired
@@ -441,7 +432,8 @@ static stat_t _limit_switch_handler(void)
 	if (get_limit_switch_thrown() == false) {
         return (STAT_NOOP);
     } else {
-        return cm_hard_alarm(STAT_LIMIT_SWITCH_HIT);
+        return cm_hard_alarm(STAT_LIMIT_SWITCH_HIT);	// use hard alarm behaviours
+//        return cm_soft_alarm(STAT_LIMIT_SWITCH_HIT);	// use soft alarm behaviours
     }
 }
 
@@ -473,10 +465,8 @@ static stat_t _interlock_estop_handler(void)
 	}
 	if(report)
 		sr_request_status_report(SR_REQUEST_IMMEDIATE);
-	return (STAT_OK);
-#else
-	return (STAT_OK);
 #endif
+	return (STAT_OK);
 }
 
 /*

@@ -95,7 +95,7 @@ enum sectionState {
 
     // Note that PLANNER_TIMEOUT is in milliseconds (seconds/1000), not microseconds (usec) like the above!
     // PLANNER_TIMEOUT should be < (MIN_PLANNED_USEC/1000) - (max time to replan)
-    #define PLANNER_TIMEOUT_MS    (50)               // Max amount of time to wait between replans
+    #define PLANNER_TIMEOUT_MS	(50)				// Max amount of time to wait between replans
 //#endif
 
 #define MIN_PLANNED_TIME        (MIN_PLANNED_USEC / MICROSECONDS_PER_MINUTE)
@@ -196,7 +196,7 @@ typedef struct mpBuffer {			// See Planning Velocity Notes for variable usage
 	float recip_jerk;				// 1/Jm used for planning (computed and cached)
 	float cbrt_jerk;				// cube root of Jm used for planning (computed and cached)
 
-    float real_move_time;          // amount of time it'll take for the move, in us
+    float real_move_time;			// amount of time it'll take for the move (minutes)
 
 	GCodeState_t gm;				// Gcode model state - passed from model, used by planner and runtime
 
@@ -244,7 +244,6 @@ typedef struct mpMoveRuntimeSingleton {	// persistent runtime variables
 	float unit[AXES];				// unit vector for axis scaling & planning
 	float target[AXES];				// final target for bf (used to correct rounding errors)
 	float position[AXES];			// current move position
-//	float position_c[AXES];			// for Kahan summation in _exec_aline_segment()
 	float waypoint[SECTIONS][AXES];	// head/body/tail endpoints for correction
 
 	float target_steps[MOTORS];		// current MR target (absolute target as steps)
