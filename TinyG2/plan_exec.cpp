@@ -2,8 +2,8 @@
  * plan_exec.c - execution function for acceleration managed lines
  * This file is part of the TinyG project
  *
- * Copyright (c) 2010 - 2014 Alden S. Hart, Jr.
- * Copyright (c) 2012 - 2014 Rob Giseburt
+ * Copyright (c) 2010 - 2015 Alden S. Hart, Jr.
+ * Copyright (c) 2012 - 2015 Rob Giseburt
  *
  * This file ("the software") is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2 as published by the
@@ -194,7 +194,7 @@ stat_t mp_exec_aline(mpBuf_t *bf)
         bf->move_state = MOVE_RUN;
         mr.move_state = MOVE_RUN;
 
-        // We are ina feedhold, so we are going to modify this block to decel to a stop as fast as possible
+        // We are in a feed hold, so we are going to modify this block to decel to a stop as fast as possible
         if (cm.hold_state == FEEDHOLD_DECEL) {
 
             mr.section = SECTION_TAIL;
@@ -214,8 +214,8 @@ stat_t mp_exec_aline(mpBuf_t *bf)
             mr.tail_length = braking_length;
         } else {
 
-            // Update the mb times -- we can "guess" quite accurately but we still need a full reaccounting
-            // to handle the locking.
+            // Update the mb times -- we can "guess" quite accurately but we still need a full 
+			// re-accounting to handle the locking.
             mb.needs_time_accounting = true;
             mb.time_in_planner -= bf->real_move_time; // Note that this is an overloaded -= operator!!
             mb.time_in_run = bf->real_move_time;
@@ -245,12 +245,12 @@ stat_t mp_exec_aline(mpBuf_t *bf)
 
     // Feedhold processing. Refer to canonical_machine.h for state machine
     // Catch the feedhold request begin deceleration immediately.
-    // If we cath it here, we're in the middle of a section -- plan accordingly.
+    // If we catch it here, we're in the middle of a section -- plan accordingly.
     if (cm.hold_state == FEEDHOLD_SYNC) {
         cm.hold_state = FEEDHOLD_DECEL;
 
         // We're going to fabricate starting a tail-only move from here.
-        // We'll decelrate as fast as we can in the space we have.
+        // We'll decelerate as fast as we can in the space we have.
 
         mr.section = SECTION_TAIL;
         mr.section_state = SECTION_NEW;

@@ -2,8 +2,8 @@
  * controller.cpp - tinyg controller and top level parser
  * This file is part of the TinyG project
  *
- * Copyright (c) 2010 - 2014 Alden S. Hart, Jr.
- * Copyright (c) 2013 - 2014 Robert Giseburt
+ * Copyright (c) 2010 - 2015 Alden S. Hart, Jr.
+ * Copyright (c) 2013 - 2015 Robert Giseburt
  *
  * This file ("the software") is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2 as published by the
@@ -199,11 +199,10 @@ static void _controller_HSM()
     DISPATCH(_check_for_phat_city_time());		// stop here if it's not phat city time!
 
     DISPATCH(st_motor_power_callback());		// stepper motor power sequencing
-    //	DISPATCH(switch_debounce_callback());		// debounce switches
+//	DISPATCH(switch_debounce_callback());		// debounce switches
     DISPATCH(sr_status_report_callback());		// conditionally send status report
     DISPATCH(qr_queue_report_callback());		// conditionally send queue report
     DISPATCH(rx_report_callback());             // conditionally send rx report
-
 }
 
 /*****************************************************************************************
@@ -215,7 +214,7 @@ static stat_t _controller_state()
 	if (cs.controller_state == CONTROLLER_CONNECTED) {		// first time through after reset
 		cs.controller_state = CONTROLLER_READY;
 		cm_request_queue_flush();
-        // OOps, we just skipped CONTROLLER_STARTUP. Do we still need it? -r
+		// Oops, we just skipped CONTROLLER_STARTUP. Do we still need it? -r
 		rpt_print_system_ready_message();
 	}
 
@@ -232,11 +231,10 @@ void controller_set_connected(bool is_connected) {
         // we JUST connected
         cs.controller_state = CONTROLLER_CONNECTED;
     } else {
-        // we just disconnected from the last device, we'll expext a banner again
+        // we just disconnected from the last device, we'll expect a banner again
         cs.controller_state = CONTROLLER_NOT_CONNECTED;
     }
 }
-
 
 /*****************************************************************************
  * command dispatchers
@@ -280,6 +278,7 @@ static void _dispatch_kernel()
 			text_response(STAT_OK, cs.saved_buf);
 		}
 
+#ifdef __AVR
 	// included for AVR diagnostics
 	} else if (*cs.bufp == '!') {
         cm_request_feedhold();
@@ -287,6 +286,7 @@ static void _dispatch_kernel()
         cm_request_queue_flush();
 	} else if (*cs.bufp == '~') {
         cm_request_end_hold();
+#endif // __AVR
 
 	} else if (*cs.bufp == '{') {							// process as JSON mode
 		cs.comm_mode = JSON_MODE;							// switch to JSON mode
@@ -310,7 +310,6 @@ static stat_t _check_for_phat_city_time(void) {
     if (mp_is_it_phat_city_time()) {
         return STAT_OK;
     }
-    
     return STAT_EAGAIN;
 }
 

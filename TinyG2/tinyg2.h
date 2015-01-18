@@ -2,8 +2,7 @@
  * tinyg2.h - tinyg2 main header
  * This file is part of the TinyG project
  *
- * Copyright (c) 2010 - 2015 Alden S. Hart, Jr.
- * Copyright (c) 2010 - 2015 Robert Giseburt
+ * Copyright (c) 2010 - 2015 Alden S. Hart Jr., Robert Giseburt
  *
  * This file ("the software") is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2 as published by the

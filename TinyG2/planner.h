@@ -2,8 +2,7 @@
  * planner.h - cartesian trajectory planning and motion execution
  * This file is part of the TinyG project
  *
- * Copyright (c) 2013 - 2015 Alden S. Hart, Jr.
- * Copyright (c) 2013 - 2015 Robert Giseburt
+ * Copyright (c) 2010 - 2015 Alden S. Hart Jr., Robert Giseburt
  *
  * This file ("the software") is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2 as published by the
@@ -209,6 +208,7 @@ typedef struct mpBufferPool {		// ring buffer for sub-moves
 	mpBuf_t *w;						// get_write_buffer pointer
 	mpBuf_t *q;						// queue_write_buffer pointer
 	mpBuf_t *r;						// get/end_run_buffer pointer
+
     bool    needs_replanned;        // mark to indicate that at least one ALINE was put in the buffer
     bool    needs_time_accounting;  // mark to indicate that the buffer has changed and the times (below) may be wrong
     bool    planning;               // the planner marks this to indicate it's (re)planning the block list
@@ -217,7 +217,7 @@ typedef struct mpBufferPool {		// ring buffer for sub-moves
     volatile float time_in_run;		// time left in the buffer executed by the runtime
     volatile float time_in_planner;	// total time of the buffer
 
-    uint32_t planner_timer;         // timout to compare against SysTickTimer.getValue() to know when to force planning
+    uint32_t planner_timer;         // timeout to compare against SysTickTimer.getValue() to know when to force planning
 
 	mpBuf_t bf[PLANNER_BUFFER_POOL_SIZE];// buffer storage
 	magic_t magic_end;
@@ -244,7 +244,7 @@ typedef struct mpMoveRuntimeSingleton {	// persistent runtime variables
 	float unit[AXES];				// unit vector for axis scaling & planning
 	float target[AXES];				// final target for bf (used to correct rounding errors)
 	float position[AXES];			// current move position
-	float position_c[AXES];			// for Kahan summation in _exec_aline_segment()
+//	float position_c[AXES];			// for Kahan summation in _exec_aline_segment()
 	float waypoint[SECTIONS][AXES];	// head/body/tail endpoints for correction
 
 	float target_steps[MOTORS];		// current MR target (absolute target as steps)
