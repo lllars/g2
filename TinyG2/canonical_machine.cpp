@@ -2,8 +2,8 @@
  * canonical_machine.cpp - rs274/ngc canonical machine.
  * This file is part of the TinyG project
  *
- * Copyright (c) 2010 - 2014 Alden S Hart, Jr.
- * Copyright (c) 2014 - 2014 Robert Giseburt
+ * Copyright (c) 2010 - 2015 Alden S Hart, Jr.
+ * Copyright (c) 2014 - 2015 Robert Giseburt
  *
  * This file ("the software") is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2 as published by the
@@ -173,9 +173,10 @@ uint8_t cm_get_combined_state()
                         case MOTION_PLANNING: return COMBINED_RUN;
                         case MOTION_RUN: return COMBINED_RUN;
                         case MOTION_STOP:
-                            //... on issuing a gcode command, we call cm_cycle_start before the motion gets queued... we don't go to MOTION_RUN
-                            //    until the command is executed by mp_exec_aline... so this assert isn't valid
-                            //rpt_exception(STAT_GENERIC_ASSERTION_FAILURE, NULL/*"mots is stop but machine is in cycle"*/);
+                            //... on issuing a gcode command, we call cm_cycle_start before the motion 
+							// gets queued... we don't go to MOTION_RUN until the command is executed 
+							// by mp_exec_aline... so this assert isn't valid
+                            // rpt_exception(STAT_GENERIC_ASSERTION_FAILURE, NULL/*"mots is stop but machine is in cycle"*/);
                             return COMBINED_RUN;
                         default:
                             rpt_exception(STAT_GENERIC_ASSERTION_FAILURE, NULL/*"mots has impossible value"*/);
@@ -377,7 +378,7 @@ float cm_get_work_position(GCodeState_t *gcode_state, uint8_t axis)
 /***********************************************************************************
  * CRITICAL HELPERS
  * Core functions supporting the canonical machining functions
- * These functions are not part of the NIST defined functions
+ * These functions are not part of the NIST canonical machine functions
  ***********************************************************************************/
 /*
  * cm_finalize_move() - perform final operations for a traverse or feed
@@ -610,9 +611,9 @@ stat_t canonical_machine_test_assertions(void)
 }
 
 /*
- * cm_soft_alarm() - alarm state; send an exception report and stop processing input
- * cm_clear() 	   - clear soft alarm
- * cm_hard_alarm() - alarm state; send an exception report and shut down machine
+ * cm_soft_alarm()  - alarm state; send an exception report and stop processing input
+ * cm_clear_alarm() - clear soft alarm
+ * cm_hard_alarm()  - alarm state; send an exception report and shut down machine
  */
 
 stat_t cm_soft_alarm(stat_t status)
@@ -622,7 +623,7 @@ stat_t cm_soft_alarm(stat_t status)
 	return (status);						// NB: More efficient than inlining rpt_exception() call.
 }
 
-stat_t cm_clear(nvObj_t *nv)				// clear soft alarm
+stat_t cm_clear_alarm(nvObj_t *nv)			// clear soft alarm
 {
 	if (cm.cycle_state == CYCLE_OFF) {
 		cm.machine_state = MACHINE_PROGRAM_STOP;
@@ -882,6 +883,10 @@ stat_t cm_straight_traverse(float target[], float flags[])
 	cm_set_work_offsets(&cm.gm);					// capture the fully resolved offsets to the state
 	cm_cycle_start();								// required for homing & other cycles
 	stat_t status = mp_aline(&cm.gm);				// send the move to the planner
+//    if (!defer_planning) {
+//	    mb.force_replan = true;
+//	    mp_plan_buffer();                           // if we aren't deferring planning, plan now
+//    }
 	cm_finalize_move();
 	if(status == STAT_MINIMUM_LENGTH_MOVE && mp_get_run_buffer() == NULL) {
 		cm_cycle_end();
@@ -1080,7 +1085,6 @@ static void _exec_mist_coolant_control(float *value, float *flag)
 		gpio_set_bit_on(MIST_COOLANT_BIT);	// if
 	gpio_set_bit_off(MIST_COOLANT_BIT);		// else
 #endif // __AVR
-
 #ifdef __ARM
 	if (cm.gm.mist_coolant == true)
 		coolant_enable_pin.set();	// if
@@ -1297,14 +1301,14 @@ stat_t cm_feedhold_sequencing_callback()
 stat_t cm_start_hold()
 {
 	cm_set_motion_state(MOTION_HOLD);
-	cm.hold_state = FEEDHOLD_SYNC;	// invokes hold from aline execution
-	return STAT_OK;
+	cm.hold_state = FEEDHOLD_SYNC;		// invokes hold from aline execution
+	return (STAT_OK);
 }
 
 stat_t cm_end_hold()
 {
 	if(cm.interlock_state != 0 && (cm.gm.spindle_mode & (~SPINDLE_PAUSED)) != SPINDLE_OFF)
-		return STAT_EAGAIN;
+		return (STAT_EAGAIN);
 
 	cm.hold_state = FEEDHOLD_END_HOLD;
 	mp_end_hold();
@@ -1321,7 +1325,7 @@ stat_t cm_end_hold()
 		cm_spindle_control_immediate(SPINDLE_OFF);
 		cm_cycle_end();
 	}
-	return STAT_OK;
+	return (STAT_OK);
 }
 
 stat_t cm_queue_flush()
@@ -1337,7 +1341,7 @@ stat_t cm_queue_flush()
 	mp_flush_planner();						// flush planner queue
 	if(cm.hold_state == FEEDHOLD_HOLD);     // end feedhold, if we're in one
 		cm_end_hold();
-	cm.end_hold_requested = false;					// cancel any pending cycle start request
+	cm.end_hold_requested = false;			// cancel any pending cycle start request
 
 	qr_request_queue_report(0);				// request a queue report, since we've changed the number of buffers available
 //	rx_request_rx_report();
@@ -1400,17 +1404,18 @@ static void _exec_program_finalize(float *value, float *flag)
 	mp_zero_segment_velocity();							// for reporting purposes
 
 	// perform the following resets if it's a program END
+	// END works a bit differently than NIST - comments are left in to raise this distinction
 	if (((uint8_t)value[0]) == MACHINE_PROGRAM_END) {
 //		cm_reset_origin_offsets();						// G92.1 - we do G91.1 instead of G92.2
 		cm_suspend_origin_offsets();					// G92.2 - as per Kramer
 		cm_set_coord_system(cm.coord_system);			// reset to default coordinate system
 		cm_select_plane(cm.select_plane);				// reset to default arc plane
 		cm_set_distance_mode(cm.distance_mode);
-//++++	cm_set_units_mode(cm.units_mode);				// reset to default units mode +++ REMOVED +++
+//		cm_set_units_mode(cm.units_mode);				// We do not reset to default units mode
 		cm_spindle_control_immediate(SPINDLE_OFF);		// M5
 		cm_flood_coolant_control(false);				// M9
 		cm_set_feed_rate_mode(UNITS_PER_MINUTE_MODE);	// G94
-	//	cm_set_motion_mode(MOTION_MODE_STRAIGHT_FEED);	// NIST specifies G1, but we cancel motion mode. Safer.
+//		cm_set_motion_mode(MOTION_MODE_STRAIGHT_FEED);	// NIST specifies G1, but we cancel motion mode. Safer.
 		cm_set_motion_mode(MODEL, MOTION_MODE_CANCEL_MOTION_MODE);
 	}
 	sr_request_status_report(SR_REQUEST_IMMEDIATE);		// request a final and full status report (not filtered)
@@ -1472,12 +1477,12 @@ stat_t cm_start_estop(void)
 	_exec_program_finalize(value, value);	// finalize now, not later
 	cm.feedhold_requested = cm.queue_flush_requested = cm.end_hold_requested = false;
 
-	return STAT_OK;
+	return (STAT_OK);
 }
 
 stat_t cm_end_estop(void)
 {
-	return STAT_OK;
+	return (STAT_OK);
 }
 
 stat_t cm_ack_estop(nvObj_t *nv)

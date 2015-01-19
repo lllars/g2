@@ -2,7 +2,8 @@
  * canonical_machine.h - rs274/ngc canonical machining functions
  * This file is part of the TinyG project
  *
- * Copyright (c) 2010 - 2015 Alden S. Hart Jr., Robert Giseburt
+ * Copyright (c) 2010 - 2015 Alden S Hart, Jr.
+ * Copyright (c) 2014 - 2015 Robert Giseburt
  *
  * This code is a loose implementation of Kramer, Proctor and Messina's
  * canonical machining functions as described in the NIST RS274/NGC v3
@@ -266,7 +267,7 @@ typedef struct cmSingleton {			// struct to manage cm globals and cycles
 	magic_t magic_end;
 } cmSingleton_t;
 
-/**** Externs - See canonical_machine.c for allocation ****/
+/**** Externs - See canonical_machine.cpp for allocation ****/
 
 extern cmSingleton_t cm;				// canonical machine controller singleton
 
@@ -576,7 +577,7 @@ stat_t canonical_machine_test_assertions(void);
 
 stat_t cm_hard_alarm(stat_t status);							// enter hard alarm state. returns same status code
 stat_t cm_soft_alarm(stat_t status);							// enter soft alarm state. returns same status code
-stat_t cm_clear(nvObj_t *nv);
+stat_t cm_clear_alarm(nvObj_t *nv);
 
 // Representation (4.3.3)
 stat_t cm_select_plane(uint8_t plane);							// G17, G18, G19

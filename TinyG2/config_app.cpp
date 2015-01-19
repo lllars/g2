@@ -187,7 +187,8 @@ const cfgItem_t cfgArray[] PROGMEM = {
 //	{ "", "wr",  _f0, 0, tx_print_int, get_wr,  set_nul,  (float *)&cs.null, 0 },	// slots available in RX window buffer
 	{ "", "msg", _f0, 0, tx_print_str, get_nul, set_nul,  (float *)&cs.null, 0 },	// string for generic messages
 //	{ "", "clc", _f0, 0, tx_print_nul, st_clc,  st_clc,   (float *)&cs.null, 0 },	// clear diagnostic step counters
-	{ "", "clear",_f0,0, tx_print_nul, cm_clear,cm_clear, (float *)&cs.null, 0 },	// GET a clear to clear soft alarm
+	{ "", "clr",  _f0,0, tx_print_nul, cm_clear_alarm, cm_clear_alarm, (float *)&cs.null, 0 },	// GET to clear soft alarm
+	{ "", "clear",_f0,0, tx_print_nul, cm_clear_alarm, cm_clear_alarm, (float *)&cs.null, 0 },	// GET to clear soft alarm
 //	{ "", "sx",  _f0, 0, tx_print_nul, run_sx,  run_sx ,  (float *)&cs.null, 0 },	// send XOFF, XON test
 	{ "", "ti",  _f0, 0, tx_print_int, get_tick,set_nul,  (float *)&cs.null, 0 },	// report system time tick
 
