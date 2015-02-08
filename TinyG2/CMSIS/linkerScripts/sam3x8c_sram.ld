@@ -28,7 +28,7 @@
 /* ---------------------------------------------------------------------------- */
 
 /*------------------------------------------------------------------------------
- *      Linker script for running in internal FLASH on the ATSAM3X8E
+ *      Linker script for running in internal SRAM on the ATSAM3X8C
  *----------------------------------------------------------------------------*/
 
 OUTPUT_FORMAT("elf32-littlearm", "elf32-littlearm", "elf32-littlearm")
@@ -48,4 +48,4 @@ STACK_SIZE = DEFINED(STACK_SIZE) ? STACK_SIZE : 0x400;
 /* The heapsize used by the application. NOTE: you need to adjust according to your application. */
 HEAP_SIZE = DEFINED(HEAP_SIZE) ? HEAP_SIZE : 0x200;
 
-INCLUDE sam3xa_flash.ld
+INCLUDE sam3xa_sram.ld

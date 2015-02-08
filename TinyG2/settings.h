@@ -49,6 +49,8 @@
 #define MOTOR_POWER_LEVEL			0.375					// default motor power level 0.00 - 1.00 (ARM only)
 #define PAUSE_DWELL_TIME			0.0
 
+#define SWITCH_TYPE 				SW_TYPE_NORMALLY_OPEN	// one of: SW_TYPE_NORMALLY_OPEN, SW_TYPE_NORMALLY_CLOSED
+
 // Communications and reporting settings
 #define COMM_MODE					JSON_MODE				// one of: TEXT_MODE, JSON_MODE
 #define TEXT_VERBOSITY				TV_VERBOSE				// one of: TV_SILENT, TV_VERBOSE
@@ -104,13 +106,11 @@
 // machine default profiles - choose only one:
 
 
-#ifdef SETTINGS_FILE
-#define SETTINGS_FILE_PATH <settings/SETTINGS_FILE>
-#include SETTINGS_FILE_PATH
-#else
-#include "settings/settings_default.h"				// Default settings for release
-#endif
-
+//#ifdef SETTINGS_FILE
+//#define SETTINGS_FILE_PATH <settings/SETTINGS_FILE>
+//#include SETTINGS_FILE_PATH
+//#else
+//#include "settings/settings_default.h"				// Default settings for release
 //#include "settings/settings_test.h"					// Settings for testing - not for release
 //#include "settings/settings_hammer.h"					// Hammer torque demo
 //#include "settings/settings_pendulum.h"				// Pendulum motion demo
@@ -118,12 +118,13 @@
 //#include "settings/settings_pocketnc.h"				// PocketNC 5 axis machining center
 //#include "settings/settings_probotixV90.h"			// Probotix FireballV90
 //#include "settings/settings_shapeoko375.h"			// Shapeoko 375mm kit
-//#include "settings/settings_shapeoko2.h"				// Shapeoko2 standard kit
+#include "settings/settings_shapeoko2.h"				// Shapeoko2 standard kit
 //#include "settings/settings_ultimaker.h"				// Ultimaker 3D printer
 //#include "settings/settings_zen7x12.h"				// Zen Toolworks 7x12
-
 //#include "settings/settings_Ultimaker.h"
 //#include "settings/settings_Ultimaker_Rob_v9h.h"
+
+//#endif
 
 /*** Handle optional modules that may not be in every machine ***/
 
