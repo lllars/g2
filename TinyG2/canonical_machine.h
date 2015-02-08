@@ -40,6 +40,9 @@
 #define RUNTIME (GCodeState_t *)&mr.gm		// absolute pointer from runtime mm struct
 #define ACTIVE_MODEL cm.am					// active model pointer is maintained by state management
 
+#define GC_INPUT (GCodeInput_t *)&cm.gn
+#define GC_FLAGS (GCodeInput_t *)&cm.gf
+
 #define _to_millimeters(a) ((cm.gm.units_mode == INCHES) ? (a * MM_PER_INCH) : a)
 
 #define JOGGING_START_VELOCITY ((float)10.0)
@@ -65,8 +68,7 @@
  *	 some state elements are necessarily restored from gm.
  *
  * - gf is used by the gcode parser interpreter to hold flags for any data
- *	 that has changed in gn during the parse. cm.gf.target[] values are also used
- *	 by the canonical machine during set_target().
+ *	 that has changed in gn during the parse.
  *
  * - cfg (config struct in config.h) is also used heavily and contains some
  *	 values that might be considered to be Gcode model values. The distinction
@@ -283,30 +285,18 @@ extern cmSingleton_t cm;				// canonical machine controller singleton
 // ### LAYER 8 CRITICAL REGION ###
 // ### DO NOT CHANGE THESE ENUMERATIONS WITHOUT COMMUNITY INPUT ###
 enum cmCombinedState {				// check alignment with messages in config.c / msg_stat strings
-	COMBINED_INITIALIZING = 0,		// [0] machine is initializing
-        //iff macs == MACHINE_INITIALIZING
-	COMBINED_READY,					// [1] machine is ready for use
-        //iff macs == MACHINE_READY
-	COMBINED_ALARM,					// [2] machine in soft alarm state
-        //iff macs == MACHINE_ALARM
-	COMBINED_PROGRAM_STOP,			// [3] program stop/no more blocks
-        //iff macs == MACHINE_PROGRAM_STOP
-	COMBINED_PROGRAM_END,			// [4] program end
-        //iff macs == MACHINE_PROGRAM_END
-	COMBINED_RUN,					// [5] motion is running
-        //iff macs == MACHINE_CYCLE, cycs == CYCLE_OFF, mots != MOTION_HOLD
-	COMBINED_HOLD,					// [6] motion is holding
-        //iff macs == MACHINE_CYCLE, cycs == CYCLE_OFF, mots == MOTION_HOLD
-	COMBINED_PROBE,					// [7] probe cycle active
-        //iff macs == MACHINE_CYCLE, cycs == CYCLE_PROBE
-	COMBINED_CYCLE,					// [8] DEPRECATED: machine is running (cycling), now just COMBINED_RUN
-        //DEPRECATED
-	COMBINED_HOMING,				// [9] homing cycle active
-        //iff macs == MACHINE_CYCLE, cycs = CYCLE_HOMING
-	COMBINED_JOG,					// [10] jogging cycle active
-        //iff macs == MACHINE_CYCLE, cycs = CYCLE_JOG
-	COMBINED_SHUTDOWN,				// [11] machine in hard alarm state (shutdown)
-        //iff macs == MACHINE_SHUTDOWN
+	COMBINED_INITIALIZING = 0,		// [0] machine is initializing		//iff macs == MACHINE_INITIALIZING
+	COMBINED_READY,					// [1] machine is ready for use		//iff macs == MACHINE_READY
+	COMBINED_ALARM,					// [2] machine in soft alarm state	//iff macs == MACHINE_ALARM
+	COMBINED_PROGRAM_STOP,			// [3] program stop/no more blocks	//iff macs == MACHINE_PROGRAM_STOP
+	COMBINED_PROGRAM_END,			// [4] program end					//iff macs == MACHINE_PROGRAM_END
+	COMBINED_RUN,					// [5] motion is running			//iff macs == MACHINE_CYCLE, cycs == CYCLE_OFF, mots != MOTION_HOLD
+	COMBINED_HOLD,					// [6] motion is holding			//iff macs == MACHINE_CYCLE, cycs == CYCLE_OFF, mots == MOTION_HOLD
+	COMBINED_PROBE,					// [7] probe cycle active			//iff macs == MACHINE_CYCLE, cycs == CYCLE_PROBE
+	COMBINED_CYCLE,					// [8] DEPRECATED: machine is running (cycling), now just COMBINED_RUN	//DEPRECATED
+	COMBINED_HOMING,				// [9] homing cycle active			//iff macs == MACHINE_CYCLE, cycs = CYCLE_HOMING
+	COMBINED_JOG,					// [10] jogging cycle active		//iff macs == MACHINE_CYCLE, cycs = CYCLE_JOG
+	COMBINED_SHUTDOWN				// [11] machine in hard alarm state (shutdown)	//iff macs == MACHINE_SHUTDOWN
 };
 //### END CRITICAL REGION ###
 
@@ -608,9 +598,11 @@ stat_t cm_set_path_control(uint8_t mode);						// G61, G61.1, G64
 
 // Machining Functions (4.3.6)
 stat_t cm_straight_feed(float target[], float flags[], bool defer_planning = false);			// G1
-stat_t cm_arc_feed(	float target[], float flags[], 				// G2, G3
-					float i, float j, float k,
-					float radius, uint8_t motion_mode);
+//stat_t cm_arc_feed(	float target[], float flags[], 				// G2, G3
+//					float i, float j, float k,
+//					float radius, uint8_t motion_mode);
+stat_t cm_arc_feed(GCodeInput_t *gn, GCodeInput_t *gf); 		// G2, G3
+
 stat_t cm_dwell(float seconds);									// G4, P parameter
 
 // Spindle Functions (4.3.7)
