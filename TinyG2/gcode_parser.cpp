@@ -468,15 +468,13 @@ static stat_t _execute_gcode_block()
 		case NEXT_ACTION_SUSPEND_ORIGIN_OFFSETS: { status = cm_suspend_origin_offsets(); break;}
 		case NEXT_ACTION_RESUME_ORIGIN_OFFSETS: { status = cm_resume_origin_offsets(); break;}
 
-		case NEXT_ACTION_DEFAULT:
-        {
-            //set the motion mode, if applicable
-            if(cm.gf.motion_mode)
-                cm.gm.motion_mode = cm.gn.motion_mode;
-
+		case NEXT_ACTION_DEFAULT: {
+            if(cm.gf.motion_mode) {
+                cm.gm.motion_mode = cm.gn.motion_mode;					//set the motion mode, if applicable
+			}
             cm_set_absolute_override(MODEL, cm.gn.absolute_override);	// apply override setting to gm struct
-            switch (cm.gn.motion_mode) {
 
+            switch (cm.gn.motion_mode) {
                 case MOTION_MODE_STRAIGHT_TRAVERSE: {
 					status = cm_straight_traverse(cm.gn.target, cm.gf.target);
 					break;

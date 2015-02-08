@@ -36,8 +36,8 @@ arc_t arc;
 
 static stat_t _compute_arc(void);
 static stat_t _compute_arc_offsets_from_radius(void);
-//static void _estimate_arc_time(void);
-static float _get_arc_time (const float linear_travel, const float angular_travel, const float radius);
+static void _estimate_arc_time(void);
+//static float _get_arc_time (const float linear_travel, const float angular_travel, const float radius);
 static float _get_theta(const float x, const float y);
 static stat_t _test_arc_soft_limits(void);
 
@@ -146,6 +146,9 @@ stat_t cm_arc_feed(float target[], float flags[],		// arc endpoints
 		arc.plane_axis_1 = AXIS_Z;
 		arc.linear_axis  = AXIS_X;
 	}
+	// determine if this is a full circle arc. Evaluates true if no target is set in axis plane
+//	arc.full_circle = !((uint32_t)flags[arc.plane_axis_0] | (uint32_t)flags[arc.plane_axis_1]);
+	arc.full_circle = (fp_ZERO(flags[arc.plane_axis_0]) & fp_ZERO(flags[arc.plane_axis_1]));
 
 	// compute arc runtime values and prep for execution by the callback
 	ritorno(_compute_arc());
@@ -159,6 +162,7 @@ stat_t cm_arc_feed(float target[], float flags[],		// arc endpoints
 		return (cm_soft_alarm(status));
 	}
 */
+	// run it
 	cm_cycle_start();						// if not already started
 	arc.run_state = MOVE_RUN;				// enable arc to be run from the callback
 	cm_finalize_move();
@@ -166,26 +170,15 @@ stat_t cm_arc_feed(float target[], float flags[],		// arc endpoints
 }
 
 /*
- * cm_abort_arc() - stop arc movement without maintaining position
+ * cm_arc_callback() - generate an arc
  *
- *	OK to call if no arc is running
- */
-
-void cm_abort_arc()
-{
-	arc.run_state = MOVE_OFF;
-}
-
-/*
- * cm_arc_cycle_callback() - generate an arc
- *
- *	cm_arc_cycle_callback() is called from the controller main loop. Each time it's called
- *	it queues as many arc segments (lines) as it can before it blocks, then returns.
+ *	cm_arc_callback() is called from the controller main loop. Each time it's called it
+ *	queues as many arc segments (lines) as it can before it blocks, then returns.
  *
  *  Parts of this routine were originally sourced from the grbl project.
  */
 
-stat_t cm_arc_cycle_callback()
+stat_t cm_arc_callback()
 {
 	if (arc.run_state == MOVE_OFF) { return (STAT_NOOP);}
 	if (mp_get_planner_buffers_available() < PLANNER_BUFFER_HEADROOM) { return (STAT_EAGAIN);}
@@ -200,6 +193,17 @@ stat_t cm_arc_cycle_callback()
 	if (--arc.segment_count > 0) return (STAT_EAGAIN);
 	arc.run_state = MOVE_OFF;
 	return (STAT_OK);
+}
+
+/*
+ * cm_abort_arc() - stop arc movement without maintaining position
+ *
+ *	OK to call if no arc is running
+ */
+
+void cm_abort_arc()
+{
+	arc.run_state = MOVE_OFF;
 }
 
 /*
@@ -240,9 +244,10 @@ static stat_t _compute_arc()
 	if (theta_end < arc.theta) { theta_end += 2*M_PI; }
 
 	// compute angular travel and invert if gcode wants a counterclockwise arc
-	// if angular travel is zero interpret it as a full circle
 	arc.angular_travel = theta_end - arc.theta;
-	if (fp_ZERO(arc.angular_travel)) {
+
+	// if angular travel is zero interpret it as a full circle
+	if (arc.full_circle) {
 		if (cm.gm.motion_mode == MOTION_MODE_CCW_ARC) {
 			arc.angular_travel -= 2*M_PI;
 		} else {
@@ -256,31 +261,39 @@ static stat_t _compute_arc()
 
 	// Find the radius, calculate travel in the depth axis of the helix,
 	// and compute the time it should take to perform the move
+	// Length is the total mm of travel of the helix (or just a planar arc)
 	arc.radius = hypot(arc.offset[arc.plane_axis_0], arc.offset[arc.plane_axis_1]);
 	arc.linear_travel = arc.gm.target[arc.linear_axis] - arc.position[arc.linear_axis];
-
-	// length is the total mm of travel of the helix (or just a planar arc)
 	arc.length = hypot(arc.angular_travel * arc.radius, fabs(arc.linear_travel));
+
+	// arc is too short to process
 	if (arc.length < cm.arc_segment_len) return (STAT_MINIMUM_LENGTH_MOVE); // arc is too short to draw
 
-	arc.time = _get_arc_time(arc.linear_travel, arc.angular_travel, arc.radius);
-
 	// Find the minimum number of segments that meets these constraints...
-	float segments_required_for_chordal_accuracy = arc.length / sqrt(4*cm.chordal_tolerance * (2 * arc.radius - cm.chordal_tolerance));
-	float segments_required_for_minimum_distance = arc.length / cm.arc_segment_len;
-	float segments_required_for_minimum_time = arc.time * MICROSECONDS_PER_MINUTE / MIN_ARC_SEGMENT_USEC;
-	arc.segments = floor(min3(segments_required_for_chordal_accuracy,
-							   segments_required_for_minimum_distance,
-							   segments_required_for_minimum_time));
+//	arc.time = _get_arc_time(arc.linear_travel, arc.angular_travel, arc.radius);
+	_estimate_arc_time();	// get an estimate of execution time to inform segment calculation
+
+	float segments_for_chordal_accuracy = arc.length / sqrt(4*cm.chordal_tolerance * (2 * arc.radius - cm.chordal_tolerance));
+	float segments_for_minimum_distance = arc.length / cm.arc_segment_len;
+	float segments_for_minimum_time = arc.time * MICROSECONDS_PER_MINUTE / MIN_ARC_SEGMENT_USEC;
+	arc.segments = floor(min3(segments_for_chordal_accuracy,
+							   segments_for_minimum_distance,
+							   segments_for_minimum_time));
 
 	arc.segments = max(arc.segments, 1);		//...but is at least 1 segment
 	arc.gm.move_time = arc.time / arc.segments;	// gcode state struct gets segment_time, not arc time
 	arc.segment_count = (int32_t)arc.segments;
 	arc.segment_theta = arc.angular_travel / arc.segments;
 	arc.segment_linear_travel = arc.linear_travel / arc.segments;
-	arc.center_0 = arc.position[arc.plane_axis_0] - sin(arc.theta) * arc.radius;
-	arc.center_1 = arc.position[arc.plane_axis_1] - cos(arc.theta) * arc.radius;
-	arc.gm.target[arc.linear_axis] = arc.position[arc.linear_axis];	// initialize the linear target
+
+	// could calculate the center, but it's given to us by the offsets
+	// arc.center_0 = arc.position[arc.plane_axis_0] - sin(arc.theta) * arc.radius;
+	// arc.center_1 = arc.position[arc.plane_axis_1] - cos(arc.theta) * arc.radius;
+	arc.center_0 = arc.offset[arc.plane_axis_0];
+	arc.center_1 = arc.offset[arc.plane_axis_1];
+
+	// initialize the linear target
+	arc.gm.target[arc.linear_axis] = arc.position[arc.linear_axis];
 	return (STAT_OK);
 }
 
@@ -398,6 +411,35 @@ static stat_t _compute_arc_offsets_from_radius()
 }
 
 /*
+ * _estimate_arc_time ()
+ *
+ *	Returns a naiive estimate of arc execution time to inform segment calculation.
+ *	The arc time is computed not to exceed the time taken in the slowest dimension
+ *	in the arc plane or in linear travel. Maximum feed rates are compared in each
+ *	dimension, but the comparison assumes that the arc will have at least one segment
+ *	where the unit vector is 1 in that dimension. This is not true for any arbitrary arc,
+ *	with the result that the time returned may be less than optimal.
+ */
+static void _estimate_arc_time ()
+{
+	// Determine move time at requested feed rate
+	if (cm.gm.feed_rate_mode == INVERSE_TIME_MODE) {
+		arc.time = cm.gm.feed_rate;		// inverse feed rate has been normalized to minutes
+		cm.gm.feed_rate = 0;			// reset feed rate so next block requires an explicit feed rate setting
+		cm.gm.feed_rate_mode = UNITS_PER_MINUTE_MODE;
+		} else {
+		arc.time = arc.length / cm.gm.feed_rate;
+	}
+
+	// Downgrade the time if there is a rate-limiting axis
+	arc.time = max(arc.time, arc.planar_travel/cm.a[arc.plane_axis_0].feedrate_max);
+	arc.time = max(arc.time, arc.planar_travel/cm.a[arc.plane_axis_1].feedrate_max);
+	if (fabs(arc.linear_travel) > 0) {
+		arc.time = max(arc.time, fabs(arc.linear_travel/cm.a[arc.linear_axis].feedrate_max));
+	}
+}
+
+/*
  * _get_arc_time ()
  *
  *	This is a naiive rate-limiting function. The arc drawing time is computed not
@@ -410,6 +452,7 @@ static stat_t _compute_arc_offsets_from_radius()
  *	Room for improvement: At least take the hypotenuse of the planar movement and
  *	the linear travel into account, but how many people actually use helixes?
  */
+/*
 static float _get_arc_time (const float linear_travel,	// in mm
 							const float angular_travel,	// in radians
 							const float radius)			// in mm
@@ -436,6 +479,7 @@ static float _get_arc_time (const float linear_travel,	// in mm
 	}
 	return (move_time);
 }
+*/
 
 /*
  * _get_theta(float x, float y)

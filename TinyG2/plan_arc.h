@@ -35,7 +35,10 @@ typedef struct arArcSingleton {	// persistent planner and runtime variables
 	float theta;				// total angle specified by arc
 	float radius;				// Raw R value, or computed via offsets
 	float angular_travel;		// travel along the arc
+	float planar_travel;		// travel in arc plane in mm
 	float linear_travel;		// travel along linear axis of arc
+	uint8_t full_circle;		// set true if full circle arcs specified
+	uint32_t rotations;			// Number of full rotations for full circles (P value)
 
 	uint8_t plane_axis_0;		// arc plane axis 0 - e.g. X for G17
 	uint8_t plane_axis_1;		// arc plane axis 1 - e.g. Y for G17
@@ -48,7 +51,7 @@ typedef struct arArcSingleton {	// persistent planner and runtime variables
 	float center_0;				// center of circle at plane axis 0 (e.g. X for G17)
 	float center_1;				// center of circle at plane axis 1 (e.g. Y for G17)
 
-	GCodeState_t gm;			// Gcode state struct is passed for each arc segment. 
+	GCodeState_t gm;			// Gcode state struct is passed for each arc segment.
 //	Usage:
 //	uint32_t linenum;			// line number of the arc feed move - same for each segment
 //	float target[AXES];			// arc segment target
@@ -62,7 +65,7 @@ extern arc_t arc;
 /* arc function prototypes */	// NOTE: See canonical_machine.h for cm_arc_feed() prototype
 
 void cm_arc_init(void);
-stat_t cm_arc_cycle_callback(void);
+stat_t cm_arc_callback(void);
 void cm_abort_arc(void);
 
 #endif	// End of include guard: PLAN_ARC_H_ONCE
