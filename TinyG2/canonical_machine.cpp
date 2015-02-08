@@ -151,7 +151,7 @@ uint8_t cm_get_combined_state()
         rpt_exception(STAT_GENERIC_ASSERTION_FAILURE, NULL/*"machine is in cycle but macs is not cycle"*/);
     if ((cm.motion_state != MOTION_STOP) && (cm.motion_state != MOTION_PLANNING) && (cm.machine_state != MACHINE_CYCLE))
         rpt_exception(STAT_GENERIC_ASSERTION_FAILURE, NULL/*"machine is in motion but macs is not cycle"*/);
-    
+
     switch(cm.machine_state)
     {
         case MACHINE_INITIALIZING: return COMBINED_INITIALIZING;
@@ -499,8 +499,8 @@ void cm_set_model_target(float target[], float flag[])
  *	The target[] arg must be in absolute machine coordinates. Best done after cm_set_model_target().
  *
  *	Tests for soft limit for any homed axis if min and max are different values. You can set min
- *	and max to the same value (e.g. 0,0) to disable soft limits for an axis. Also will not test 
- *	a min or a max if the value is more than +/- 1000000 (plus or minus 1 million ). 
+ *	and max to the same value (e.g. 0,0) to disable soft limits for an axis. Also will not test
+ *	a min or a max if the value is more than +/- 1000000 (plus or minus 1 million ).
  *	This allows a single end to be tested w/the other disabled, should that requirement ever arise.
  */
 
@@ -876,6 +876,16 @@ stat_t cm_resume_origin_offsets()
 
 stat_t cm_straight_traverse(float target[], float flags[])
 {
+	// trap no-axes-specified error
+	bool axisCoords = false;
+	for(int8_t i=0; i<AXES; ++i) {
+		if(fp_NOT_ZERO(cm.gf.target[i])) {
+			axisCoords = true;
+		}
+	}
+	if (!axisCoords) return (STAT_GCODE_AXIS_IS_MISSING);
+
+	// setup and perform the traverse
 	cm.gm.motion_mode = MOTION_MODE_STRAIGHT_TRAVERSE;
 	cm_set_model_target(target, flags);
 	ritorno (cm_test_soft_limits(cm.gm.target)); 	// test soft limits; exit if thrown
@@ -990,8 +1000,17 @@ stat_t cm_dwell(float seconds)
 /*
  * cm_straight_feed() - G1
  */
-stat_t cm_straight_feed(float target[], float flags[], bool defer_planning/* = false*/)
+stat_t cm_straight_feed(float target[], float flags[], bool defer_planning /* = false*/ )
 {
+	// trap no-axes-specified error
+	bool axisCoords = false;
+	for(int8_t i=0; i<AXES; ++i) {
+		if(fp_NOT_ZERO(cm.gf.target[i])) {
+			axisCoords = true;
+		}
+	}
+	if (!axisCoords) return (STAT_GCODE_AXIS_IS_MISSING);
+
 	// trap zero feed rate condition
 	if ((cm.gm.feed_rate_mode != INVERSE_TIME_MODE) && (fp_ZERO(cm.gm.feed_rate))) {
 		return (STAT_GCODE_FEEDRATE_NOT_SPECIFIED);

@@ -38,7 +38,7 @@
 /****** REVISIONS ******/
 
 #ifndef TINYG_FIRMWARE_BUILD
-#define TINYG_FIRMWARE_BUILD   		076.01 // Feature branch for switch reporting and others
+#define TINYG_FIRMWARE_BUILD   		076.02 // Moved arc error trapping to arc function
 
 #endif
 #define TINYG_FIRMWARE_VERSION		0.97						// firmware major version

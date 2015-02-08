@@ -2,8 +2,7 @@
  * plan_arc.c - arc planning and motion execution
  * This file is part of the TinyG project
  *
- * Copyright (c) 2010 - 2014 Alden S. Hart, Jr.
- * Portions copyright (c) 2009 Simen Svale Skogsrud
+ * Copyright (c) 2010 - 2015 Alden S. Hart, Jr.
  *
  * This file ("the software") is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2 as published by the
@@ -37,6 +36,7 @@ arc_t arc;
 
 static stat_t _compute_arc(void);
 static stat_t _compute_arc_offsets_from_radius(void);
+//static void _estimate_arc_time(void);
 static float _get_arc_time (const float linear_travel, const float angular_travel, const float radius);
 static float _get_theta(const float x, const float y);
 static stat_t _test_arc_soft_limits(void);
@@ -44,10 +44,10 @@ static stat_t _test_arc_soft_limits(void);
 /*****************************************************************************
  * Canonical Machining arc functions (arc prep for planning and runtime)
  *
- * cm_arc_init()			- initialize arcs
- * cm_arc_feed()			- canonical machine entry point for arc
- * cm_abort_arc()			- stop an arc in process
- * cm_arc_cycle_callback()	- main-loop callback for arc generation
+ * cm_arc_init()	 - initialize arcs
+ * cm_arc_feed() 	 - canonical machine entry point for arc
+ * cm_arc_callback() - mail-loop callback for arc generation
+ * cm_abort_arc()	 - stop an arc in process
  */
 
 /*
@@ -62,14 +62,47 @@ void cm_arc_init()
 /*
  * cm_arc_feed() - canonical machine entry point for arc
  *
- * Generates an arc by queueing line segments to the move buffer. The arc is
- * approximated by generating a large number of tiny, linear segments.
+ *	Generates an arc by queuing line segments to the move buffer.
+ *	The arc is approximated by generating a large number of tiny, linear segments.
+ *	A radius arc is requested by a non-zero radius value
+ *	A 360 degree arc is requested by having no endpoints (uses the current position as the endpoint)
  */
-stat_t cm_arc_feed(float target[], float flags[],// arc endpoints
-				   float i, float j, float k, 	 // raw arc offsets
-				   float radius, float radius_flag, 				 // non-zero radius implies radius mode
-				   uint8_t motion_mode)			 // defined motion mode
+stat_t cm_arc_feed(float target[], float flags[],		// arc endpoints
+				   float i, float j, float k, 			// raw arc offsets
+				   float radius, float radius_flag,
+				   uint8_t motion_mode)					// defined motion mode
 {
+	// Trap arc specification errors and other errors
+
+	bool radius_f = fp_NOT_ZERO(cm.gf.arc_radius);		// true if radius arc
+	bool offset_0 = fp_NOT_ZERO(cm.gf.arc_offset[0]);	// true if offset 0 has bee specified in the Gcode block
+	bool offset_1 = fp_NOT_ZERO(cm.gf.arc_offset[1]);
+	bool offset_2 = fp_NOT_ZERO(cm.gf.arc_offset[2]);
+
+	// It's an error to specify both R and any of IJK
+	if(radius_f && (offset_0 || offset_1 || offset_2)) {
+		return (STAT_ARC_SPECIFICATION_ERROR);
+	}
+
+	// For IJK it's an error to specify an irrelevant axis (e.g. K while you're on the XZ plane)
+	if(!radius_f && ((cm.gm.select_plane == CANON_PLANE_XY && !offset_0 && !offset_1) ||
+					 (cm.gm.select_plane == CANON_PLANE_XZ && !offset_0 && !offset_2) ||
+					 (cm.gm.select_plane == CANON_PLANE_YZ && !offset_1 && !offset_2))) {
+		return (STAT_ARC_OFFSETS_MISSING_FOR_SELECTED_PLANE);
+	}
+
+	bool target_X = fp_NOT_ZERO(cm.gf.target[AXIS_X]);	// true if X axis has been specified in the Gcode block
+	bool target_Y = fp_NOT_ZERO(cm.gf.target[AXIS_Y]);
+	bool target_Z = fp_NOT_ZERO(cm.gf.target[AXIS_Z]);
+
+	// If IJK are specified no axis coordinates need to be specified, but if R is specified
+	// at least one axis coordinate needs to be specified (e.g. X while you're on the XZ plane)
+	if(radius_f && ((cm.gm.select_plane == CANON_PLANE_XY && !target_X && !target_Y) ||
+					(cm.gm.select_plane == CANON_PLANE_XZ && !target_X && !target_Z) ||
+					(cm.gm.select_plane == CANON_PLANE_YZ && !target_Y && !target_Z))) {
+		return (STAT_ARC_AXIS_MISSING_FOR_SELECTED_PLANE);
+	}
+
 	// trap zero feed rate condition
 	if ((cm.gm.feed_rate_mode != INVERSE_TIME_MODE) && (fp_ZERO(cm.gm.feed_rate))) {
 		return (STAT_GCODE_FEEDRATE_NOT_SPECIFIED);
@@ -118,13 +151,14 @@ stat_t cm_arc_feed(float target[], float flags[],// arc endpoints
 	ritorno(_compute_arc());
 
 	// test arc soft limits
+/*
 	stat_t status = _test_arc_soft_limits();
 	if (status != STAT_OK) {
 		cm.gm.motion_mode = MOTION_MODE_CANCEL_MOTION_MODE;
 		copy_vector(cm.gm.target, cm.gmx.position);		// reset model position
 		return (cm_soft_alarm(status));
 	}
-
+*/
 	cm_cycle_start();						// if not already started
 	arc.run_state = MOVE_RUN;				// enable arc to be run from the callback
 	cm_finalize_move();
@@ -484,7 +518,7 @@ static stat_t _test_arc_soft_limit_plane_axis(float center, uint8_t plane_axis)
 {
 	if (center <= arc.position[plane_axis]) {
 		if (arc.angular_travel < M_PI) {							// case (1)
-			return (STAT_OK);		
+			return (STAT_OK);
 		}
 		if ((center - arc.radius) < cm.a[plane_axis].travel_min) {	// case (2)
 			return (STAT_SOFT_LIMIT_EXCEEDED_ARC);
@@ -498,10 +532,10 @@ static stat_t _test_arc_soft_limit_plane_axis(float center, uint8_t plane_axis)
 
 static stat_t _test_arc_soft_limits()
 {
-	// Test if target falls outside boundaries. This is a 3 dimensional test 
+	// Test if target falls outside boundaries. This is a 3 dimensional test
 	// so it also checks the linear axis of the arc (helix axis)
 	ritorno(cm_test_soft_limits(arc.gm.target));
-	
+
 	// test arc excursions
 	ritorno(_test_arc_soft_limit_plane_axis(arc.center_0, arc.plane_axis_0));
 	ritorno(_test_arc_soft_limit_plane_axis(arc.center_1, arc.plane_axis_1));
