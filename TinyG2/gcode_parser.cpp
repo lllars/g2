@@ -486,7 +486,7 @@ static stat_t _execute_gcode_block()
                 case MOTION_MODE_CW_ARC: case MOTION_MODE_CCW_ARC: {
 					status = cm_arc_feed(cm.gn.target, cm.gf.target,
 										 cm.gn.arc_offset[0], cm.gn.arc_offset[1], cm.gn.arc_offset[2],
-										 cm.gn.arc_radius, cm.gf.arc_radius, cm.gn.motion_mode);
+										 cm.gn.arc_radius, cm.gn.motion_mode);
                     break;
 				}
                 default: break;

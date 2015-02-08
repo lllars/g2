@@ -69,7 +69,7 @@ void cm_arc_init()
  */
 stat_t cm_arc_feed(float target[], float flags[],		// arc endpoints
 				   float i, float j, float k, 			// raw arc offsets
-				   float radius, float radius_flag,
+				   float radius,
 				   uint8_t motion_mode)					// defined motion mode
 {
 	// Trap arc specification errors and other errors
@@ -154,14 +154,13 @@ stat_t cm_arc_feed(float target[], float flags[],		// arc endpoints
 	ritorno(_compute_arc());
 
 	// test arc soft limits
-/*
 	stat_t status = _test_arc_soft_limits();
 	if (status != STAT_OK) {
 		cm.gm.motion_mode = MOTION_MODE_CANCEL_MOTION_MODE;
 		copy_vector(cm.gm.target, cm.gmx.position);		// reset model position
 		return (cm_soft_alarm(status));
 	}
-*/
+
 	// run it
 	cm_cycle_start();						// if not already started
 	arc.run_state = MOVE_RUN;				// enable arc to be run from the callback
@@ -246,7 +245,7 @@ static stat_t _compute_arc()
 	// compute angular travel and invert if gcode wants a counterclockwise arc
 	arc.angular_travel = theta_end - arc.theta;
 
-	// if angular travel is zero interpret it as a full circle
+	// If no endpoint was provided interpret it as a full circle
 	if (arc.full_circle) {
 		if (cm.gm.motion_mode == MOTION_MODE_CCW_ARC) {
 			arc.angular_travel -= 2*M_PI;
@@ -264,13 +263,13 @@ static stat_t _compute_arc()
 	// Length is the total mm of travel of the helix (or just a planar arc)
 	arc.radius = hypot(arc.offset[arc.plane_axis_0], arc.offset[arc.plane_axis_1]);
 	arc.linear_travel = arc.gm.target[arc.linear_axis] - arc.position[arc.linear_axis];
-	arc.length = hypot(arc.angular_travel * arc.radius, fabs(arc.linear_travel));
+	arc.planar_travel = arc.angular_travel * arc.radius;
+	arc.length = hypot(arc.planar_travel, fabs(arc.linear_travel));
 
 	// arc is too short to process
-	if (arc.length < cm.arc_segment_len) return (STAT_MINIMUM_LENGTH_MOVE); // arc is too short to draw
+	if (arc.length < cm.arc_segment_len) return (STAT_MINIMUM_LENGTH_MOVE);
 
 	// Find the minimum number of segments that meets these constraints...
-//	arc.time = _get_arc_time(arc.linear_travel, arc.angular_travel, arc.radius);
 	_estimate_arc_time();	// get an estimate of execution time to inform segment calculation
 
 	float segments_for_chordal_accuracy = arc.length / sqrt(4*cm.chordal_tolerance * (2 * arc.radius - cm.chordal_tolerance));
@@ -427,7 +426,7 @@ static void _estimate_arc_time ()
 		arc.time = cm.gm.feed_rate;		// inverse feed rate has been normalized to minutes
 		cm.gm.feed_rate = 0;			// reset feed rate so next block requires an explicit feed rate setting
 		cm.gm.feed_rate_mode = UNITS_PER_MINUTE_MODE;
-		} else {
+	} else {
 		arc.time = arc.length / cm.gm.feed_rate;
 	}
 
@@ -438,48 +437,6 @@ static void _estimate_arc_time ()
 		arc.time = max(arc.time, fabs(arc.linear_travel/cm.a[arc.linear_axis].feedrate_max));
 	}
 }
-
-/*
- * _get_arc_time ()
- *
- *	This is a naiive rate-limiting function. The arc drawing time is computed not
- *	to exceed the time taken in the slowest dimension - in the arc plane or in
- *	linear travel. Maximum feed rates are compared in each dimension, but the
- *	comparison assumes that the arc will have at least one segment where the unit
- *	vector is 1 in that dimension. This is not true for any arbitrary arc, with
- *	the result that the time returned may be less than optimal.
- *
- *	Room for improvement: At least take the hypotenuse of the planar movement and
- *	the linear travel into account, but how many people actually use helixes?
- */
-/*
-static float _get_arc_time (const float linear_travel,	// in mm
-							const float angular_travel,	// in radians
-							const float radius)			// in mm
-{
-	float tmp;
-	float move_time=0;	// picks through the times and retains the slowest
-	float planar_travel = fabs(angular_travel * radius);// travel in arc plane
-
-	if (cm.gm.feed_rate_mode == INVERSE_TIME_MODE) {
-		move_time = cm.gm.feed_rate;	// feed rate has been normalized to minutes
-		cm.gm.feed_rate = 0;			// reset feed rate so next block requires an explicit feed rate setting
-		cm.gm.feed_rate_mode = UNITS_PER_MINUTE_MODE;
-	} else {
-		move_time = sqrt(square(planar_travel) + square(linear_travel)) / cm.gm.feed_rate;
-	}
-	if ((tmp = planar_travel/cm.a[arc.plane_axis_0].feedrate_max) > move_time) {
-		move_time = tmp;
-	}
-	if ((tmp = planar_travel/cm.a[arc.plane_axis_1].feedrate_max) > move_time) {
-		move_time = tmp;
-	}
-	if ((tmp = fabs(linear_travel/cm.a[arc.linear_axis].feedrate_max)) > move_time) {
-		move_time = tmp;
-	}
-	return (move_time);
-}
-*/
 
 /*
  * _get_theta(float x, float y)
@@ -504,7 +461,7 @@ static float _get_theta(const float x, const float y)
 }
 
 /*
- * _test_arc_soft_limits() - return error code if soft limit is exceeded
+ * _test_arc_soft_limits() - return error status if soft limit is exceeded
  *
  *	Test if arc extends beyond arc plane boundaries set in soft limits.
  *
@@ -533,7 +490,7 @@ static float _get_theta(const float x, const float y)
  *	5 or 3, and the obtuse arcs will be "below" in sections 5 or 7. But it's simpler, because
  *	we know that the arc is > 180 degrees (obtuse) if the angular travel value is > pi.
  *
- *	The example below only tests the X axis (0 axis), but testing the other axis is similar
+ *	The example below only tests the X axis (0 plane axis), but testing the other axes is similar
  *
  *	  (1) If Cx <= Px and arc is acute; no test is needed
  *
@@ -576,12 +533,15 @@ static stat_t _test_arc_soft_limit_plane_axis(float center, uint8_t plane_axis)
 
 static stat_t _test_arc_soft_limits()
 {
-	// Test if target falls outside boundaries. This is a 3 dimensional test
-	// so it also checks the linear axis of the arc (helix axis)
-	ritorno(cm_test_soft_limits(arc.gm.target));
+	if (cm.soft_limit_enable == true) {
 
-	// test arc excursions
-	ritorno(_test_arc_soft_limit_plane_axis(arc.center_0, arc.plane_axis_0));
-	ritorno(_test_arc_soft_limit_plane_axis(arc.center_1, arc.plane_axis_1));
+		// Test if target falls outside boundaries. This is a 3 dimensional test
+		// so it also checks the linear axis of the arc (helix axis)
+		ritorno(cm_test_soft_limits(arc.gm.target));
+
+		// test arc extents
+		ritorno(_test_arc_soft_limit_plane_axis(arc.center_0, arc.plane_axis_0));
+		ritorno(_test_arc_soft_limit_plane_axis(arc.center_1, arc.plane_axis_1));
+	}
 	return(STAT_OK);
 }
