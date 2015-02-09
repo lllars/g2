@@ -1,5 +1,5 @@
 /*
- * planner.h - cartesian trajectory planning and motion execution
+ * planner.h - Cartesian trajectory planning and motion execution (g2)
  * This file is part of the TinyG project
  *
  * Copyright (c) 2013 - 2015 Alden S. Hart, Jr.
@@ -79,28 +79,17 @@ enum sectionState {
 /* ESTD_SEGMENT_USEC	 Microseconds per planning segment
  *	Should be experimentally adjusted if the MIN_SEGMENT_LENGTH is changed
  */
-//#ifdef __AVR
-//	#define NOM_SEGMENT_USEC 	 ((float)5000)		// nominal segment time
-//	#define MIN_SEGMENT_USEC 	 ((float)2500)		// minimum segment time / minimum move time
-//	#define MIN_ARC_SEGMENT_USEC ((float)10000)		// minimum arc segment time
-//#endif
-//#ifdef __ARM
-    #define MIN_PLANNED_USEC     ((float)20000)     // minimum time in the planner below which we must replan immediately
+#define NOM_SEGMENT_USEC 		((float)5000)		// nominal segment time
+#define MIN_SEGMENT_USEC 		((float)2500)		// minimum segment time / minimum move time
+#define MIN_ARC_SEGMENT_USEC	((float)10000)		// minimum arc segment time
 
-    #define PHAT_CITY_USEC       ((float)20000)     // if you have at least this much time in the planner,
-                                                    // you can do whatever you want! (Including send SRs.)
+#define MIN_PLANNED_USEC		((float)20000)		// minimum time in the planner below which we must replan immediately
+#define PHAT_CITY_USEC			((float)20000)		// if you have at least this much time in the planner,
+													// you can do whatever you want! (Including send SRs.)
 
-    #define NOM_SEGMENT_USEC 	 ((float)5000)		// nominal segment time
-	#define MIN_SEGMENT_USEC 	 ((float)2500)		// minimum segment time / minimum move time
-	#define MIN_ARC_SEGMENT_USEC ((float)10000)		// minimum arc segment time
-
-    // Note that PLANNER_TIMEOUT is in milliseconds (seconds/1000), not microseconds (usec) like the above!
-    // PLANNER_TIMEOUT should be < (MIN_PLANNED_USEC/1000) - (max time to replan)
-    #define PLANNER_TIMEOUT_MS    (50)               // Max amount of time to wait between replans
-//#endif
-
-#define MIN_PLANNED_TIME        (MIN_PLANNED_USEC / MICROSECONDS_PER_MINUTE)
-#define PHAT_CITY_TIME          (PHAT_CITY_USEC / MICROSECONDS_PER_MINUTE)
+// PLANNER_TIMEOUT should be < (MIN_PLANNED_USEC/1000) - (max time to replan)
+// Note that PLANNER_TIMEOUT is in milliseconds (seconds/1000), not microseconds (usec) like the above!
+#define PLANNER_TIMEOUT_MS		(50)				// Max amount of time to wait between replans
 
 #define NOM_SEGMENT_TIME 		(NOM_SEGMENT_USEC / MICROSECONDS_PER_MINUTE)
 #define MIN_SEGMENT_TIME 		(MIN_SEGMENT_USEC / MICROSECONDS_PER_MINUTE)
@@ -109,6 +98,8 @@ enum sectionState {
 #define MIN_BLOCK_TIME			MIN_SEGMENT_TIME	// factor for minimum size Gcode block to process
 
 #define MIN_SEGMENT_TIME_PLUS_MARGIN ((MIN_SEGMENT_USEC+1) / MICROSECONDS_PER_MINUTE)
+#define MIN_PLANNED_TIME        (MIN_PLANNED_USEC / MICROSECONDS_PER_MINUTE)
+#define PHAT_CITY_TIME          (PHAT_CITY_USEC / MICROSECONDS_PER_MINUTE)
 
 /* PLANNER_STARTUP_DELAY_SECONDS
  *	Used to introduce a short dwell before planning an idle machine.
@@ -156,8 +147,8 @@ typedef void (*cm_exec_t)(float[], float[]);	// callback to canonical_machine ex
 
 enum mpBufferState {				// bf->buffer_state values
 	MP_BUFFER_EMPTY = 0,			// struct is available for use (MUST BE 0)
-    MP_BUFFER_PLANNING,             // being written ("checked out") for planning
-	MP_BUFFER_QUEUED,				// in queue
+    MP_BUFFER_PLANNING,             // being written ("checked out") or written to queue - ready for planning or replanning
+	MP_BUFFER_QUEUED,				// in queue and planned - ready to run, will not be planned again
 	MP_BUFFER_PENDING,				// marked as the next buffer to run
 	MP_BUFFER_RUNNING				// current running buffer
 };

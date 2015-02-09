@@ -61,13 +61,16 @@
 #include "util.h"
 
 using namespace Motate;
+// disabled
 //extern OutputPin<-1> plan_debug_pin1;
-extern OutputPin<kDebug1_PinNumber> plan_debug_pin1;
 //extern OutputPin<-1> plan_debug_pin2;
-extern OutputPin<kDebug2_PinNumber> plan_debug_pin2;
 extern OutputPin<-1> plan_debug_pin3;
-//extern OutputPin<kDebug3_PinNumber> plan_debug_pin3;
 extern OutputPin<-1> plan_debug_pin4;
+
+// enabled
+extern OutputPin<kDebug1_PinNumber> plan_debug_pin1;
+extern OutputPin<kDebug2_PinNumber> plan_debug_pin2;
+//extern OutputPin<kDebug3_PinNumber> plan_debug_pin3;
 //extern OutputPin<kDebug4_PinNumber> plan_debug_pin4;
 
 // Allocate planner structures
@@ -79,7 +82,6 @@ mpMoveRuntimeSingleton_t mr;	// context for line runtime
 /*
  * Local Scope Data and Functions
  */
-#define _bump(a) ((a<PLANNER_BUFFER_POOL_SIZE-1)?(a+1):0) // buffer incr & wrap
 #define spindle_speed move_time	// local alias for spindle_speed to the time variable
 #define value_vector gm.target	// alias for vector of values
 #define flag_vector unit		// alias for vector of flags
@@ -137,6 +139,7 @@ void mp_flush_planner()
 {
 	cm_abort_arc();
 	mp_init_buffers();
+//	cm_set_motion_state(MOTION_STOP);		// +++ This is present in v8 version
 }
 
 /*
@@ -213,8 +216,8 @@ void mp_queue_command(void(*cm_exec)(float[], float[]), float *value, float *fla
 	}
 
 	bf->move_type = MOVE_TYPE_COMMAND;
-	bf->bf_func = _exec_command;      // callback to planner queue exec function
-	bf->cm_func = cm_exec;            // callback to canonical machine exec function
+	bf->bf_func = _exec_command;						// callback to planner queue exec function
+	bf->cm_func = cm_exec;								// callback to canonical machine exec function
     bf->replannable = true;           // allow the normal planning to go backward past this zero-speed and zero-length "move"
 
 	for (uint8_t axis = AXIS_X; axis < AXES; axis++) {
@@ -228,7 +231,7 @@ static stat_t _exec_command(mpBuf_t *bf)
 {
 	if(cm.hold_state == FEEDHOLD_SYNC) {
 		mp_start_hold();
-		return STAT_NOOP;
+		return (STAT_NOOP);
 	}
 
 	st_prep_command(bf);
@@ -269,7 +272,7 @@ static stat_t _exec_dwell(mpBuf_t *bf)
 {
 	if(cm.hold_state == FEEDHOLD_SYNC) {
 		mp_start_hold();
-		return STAT_NOOP;
+		return (STAT_NOOP);
 	}
 
 	st_prep_dwell((uint32_t)(bf->gm.move_time * 1000000.0));// convert seconds to uSec
@@ -332,6 +335,8 @@ static stat_t _exec_dwell(mpBuf_t *bf)
  */
 
 uint8_t mp_get_planner_buffers_available(void) { return (mb.buffers_available);}
+
+#define _bump(a) ((a<PLANNER_BUFFER_POOL_SIZE-1)?(a+1):0) // buffer incr & wrap
 
 void mp_init_buffers(void)
 {
@@ -408,7 +413,7 @@ void mp_commit_write_buffer(const uint8_t move_type)
     }
 
     qr_request_queue_report(+1);				// request a QR and add to the "added buffers" count
-    
+
 }
 
 stat_t mp_plan_buffer()
@@ -468,7 +473,7 @@ bool mp_is_it_phat_city_time() {
 	if(cm.hold_state == FEEDHOLD_HOLD) {
 		return true;
 	}
-	
+
     mp_planner_time_accounting();
     float time_in_planner = mb.time_in_run + mb.time_in_planner;
     return ((time_in_planner <= 0) || (PHAT_CITY_TIME < time_in_planner));
