@@ -127,7 +127,7 @@ struct Stepper {
                 st_run.mot[motor].power_state = MOTOR_POWER_TIMEOUT_START;
 
                 // if we have a common enable, this is the time to use it...
-                common_enable.clear();
+                common_enable.set();
             }
         }
 	};
@@ -434,7 +434,7 @@ static void _deenergize_motor(const uint8_t motor)
             }
         }
         if (do_disable) {
-            common_enable.set(); // enables are inverted
+            common_enable.clear(); // enables are inverted
         }
     }
 #endif
@@ -463,7 +463,7 @@ static void _energize_motor(const uint8_t motor, float timeout_seconds)
 	if (motor == MOTOR_5) motor_5.enable();
 	if (motor == MOTOR_6) motor_6.enable();
 
-    common_enable.clear(); // enables are inverted
+    common_enable.set(); // enables are inverted
 #endif
 
 	st_run.mot[motor].power_systick = SysTickTimer_getValue() + (timeout_seconds * 1000);
@@ -496,7 +496,7 @@ void st_energize_motors(float timeout_seconds)
 		_energize_motor(motor, timeout_seconds);
 	}
 #ifdef __ARM
-	common_enable.clear();			// enable gShield common enable
+	common_enable.set();			// enable gShield common enable
 #endif
 }
 
@@ -506,7 +506,7 @@ void st_deenergize_motors()
 		_deenergize_motor(motor);
 	}
 #ifdef __ARM
-	common_enable.set();			// disable gShield common enable
+	common_enable.clear();			// disable gShield common enable
 #endif
 }
 
@@ -1069,6 +1069,27 @@ stat_t st_prep_line(float travel_steps[], float following_error[], float segment
 			st_pre.mot[motor].step_sign = -1;
 		}
 
+		
+		
+		// rudimentary backlash compensation
+		/*if (st_pre.mot[motor].direction != st_pre.mot[motor].prev_direction) {
+				printf("backlashing...\n");
+				printf("travel_steps = %8.5f", travel_steps[motor]);
+				// travel_steps[motor] += st_cfg.mot[motor].backlash * st_pre.mot[motor].step_sign;
+				printf(" --> %8.5f\n", travel_steps[motor]);
+				printf("segment time = %8.5f", segment_time);
+				segment_time += st_cfg.mot[motor].backlash / 900;
+				printf(" --> %8.5f\n", segment_time);
+		}*/
+		
+		
+		
+		
+
+		// Detect segment time changes and setup the accumulator correction factor and flag.
+		// Putting this here computes the correct factor even if the motor was dormant for some
+		// number of previous moves. Correction is computed based on the last segment time actually used.
+
 		// Detect segment time changes and setup the accumulator correction factor and flag.
 		// Putting this here computes the correct factor even if the motor was dormant for some
 		// number of previous moves. Correction is computed based on the last segment time actually used.
@@ -1083,21 +1104,37 @@ stat_t st_prep_line(float travel_steps[], float following_error[], float segment
 
 #ifdef __STEP_CORRECTION
 		// 'Nudge' correction strategy. Inject a single, scaled correction value then hold off
+		
+		// backlash compensation
+		if (st_pre.mot[motor].direction != st_pre.mot[motor].prev_direction) {
+			if (st_pre.mot[motor].step_sign == 1) {
+				st_pre.mot[motor].backlash_deviation = 0;
+			} else {
+				st_pre.mot[motor].backlash_deviation = -st_cfg.mot[motor].backlash;
+			}
+			//printf("backlash switch %6.3f\n", st_pre.mot[motor].backlash_deviation);
+		}
+
+		//printf("s_time: %7.6f\tf_error: %5.4f \tt_steps: %7.4f", segment_time, following_error[motor], travel_steps[motor]);
 
 		if ((--st_pre.mot[motor].correction_holdoff < 0) &&
-			(fabs(following_error[motor]) > STEP_CORRECTION_THRESHOLD)) {
+			(fabs(following_error[motor] - st_pre.mot[motor].backlash_deviation) > STEP_CORRECTION_THRESHOLD)) {
 
 			st_pre.mot[motor].correction_holdoff = STEP_CORRECTION_HOLDOFF;
-			correction_steps = following_error[motor] * STEP_CORRECTION_FACTOR;
+			correction_steps = (following_error[motor] - st_pre.mot[motor].backlash_deviation) * STEP_CORRECTION_FACTOR;
 
 			if (correction_steps > 0) {
-				correction_steps = min3(correction_steps, fabs(travel_steps[motor]), STEP_CORRECTION_MAX);
+				correction_steps = min3(correction_steps, fabs(travel_steps[motor] * STEP_CORRECTION_JERK_INCREASE), STEP_CORRECTION_MAX);
 			} else {
-				correction_steps = max3(correction_steps, -fabs(travel_steps[motor]), -STEP_CORRECTION_MAX);
+				correction_steps = max3(correction_steps, -fabs(travel_steps[motor] * STEP_CORRECTION_JERK_INCREASE), -STEP_CORRECTION_MAX);
 			}
 			st_pre.mot[motor].corrected_steps += correction_steps;
 			travel_steps[motor] -= correction_steps;
+			//printf("\tc_steps: %6.3f", correction_steps);
 		}
+		
+		//printf("\n");
+		
 #endif
 		// Compute substeb increment. The accumulator must be *exactly* the incoming
 		// fractional steps times the substep multiplier or positional drift will occur.
@@ -1353,6 +1390,7 @@ static const char fmt_0tr[] PROGMEM = "[%s%s] m%s travel per revolution%10.4f%s\
 static const char fmt_0po[] PROGMEM = "[%s%s] m%s polarity%18d [0=normal,1=reverse]\n";
 static const char fmt_0pm[] PROGMEM = "[%s%s] m%s power management%10d [0=disabled,1=always on,2=in cycle,3=when moving]\n";
 static const char fmt_0pl[] PROGMEM = "[%s%s] m%s motor power level%13.3f [0.000=minimum, 1.000=maximum]\n";
+static const char fmt_0bl[] PROGMEM = "[%s%s] m%s backlash%22.3f steps\n";
 #ifdef __AVR
     static const char fmt_0mi[] PROGMEM = "[%s%s] m%s microsteps%16d [1,2,4,8]\n";
 #else
@@ -1385,5 +1423,6 @@ void st_print_mi(nvObj_t *nv) { _print_motor_int(nv, fmt_0mi);}
 void st_print_po(nvObj_t *nv) { _print_motor_int(nv, fmt_0po);}
 void st_print_pm(nvObj_t *nv) { _print_motor_int(nv, fmt_0pm);}
 void st_print_pl(nvObj_t *nv) { _print_motor_flt(nv, fmt_0pl);}
+void st_print_bl(nvObj_t *nv) { _print_motor_flt(nv, fmt_0bl);}
 
 #endif // __TEXT_MODE

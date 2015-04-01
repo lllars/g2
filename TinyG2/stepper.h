@@ -317,8 +317,9 @@ typedef enum {
  */
 #define STEP_CORRECTION_THRESHOLD	(float)2.00		// magnitude of forwarding error to apply correction (in steps)
 #define STEP_CORRECTION_FACTOR		(float)0.25		// factor to apply to step correction for a single segment
-#define STEP_CORRECTION_MAX			(float)0.60		// max step correction allowed in a single segment
-#define STEP_CORRECTION_HOLDOFF		 	 	  5		// minimum number of segments to wait between error correction
+#define STEP_CORRECTION_MAX			(float)10.0		// max step correction allowed in a single segment
+#define STEP_CORRECTION_HOLDOFF		 	 	  0		// minimum number of segments to wait between error correction
+#define STEP_CORRECTION_JERK_INCREASE 	   0.25		// max amount of jerk increase during step correction
 #define STEP_INITIAL_DIRECTION		DIRECTION_CW
 
 /*
@@ -347,6 +348,7 @@ typedef struct cfgMotor {               // per-motor configs
     uint8_t polarity;                   // 0=normal polarity, 1=reverse motor direction
     stPowerMode power_mode;             // See stPowerMode for values
     float power_level;                  // set 0.000 to 1.000 for PMW vref setting
+    float backlash;						// in steps
     float step_angle;                   // degrees per whole step (ex: 1.8)
     float travel_rev;                   // mm or deg of travel per motor revolution
     float steps_per_unit;               // microsteps per mm (or degree) of travel
@@ -398,6 +400,9 @@ typedef struct stPrepMotor {
     float prev_segment_time;                // segment time from previous segment run for this motor
     float accumulator_correction;           // factor for adjusting accumulator between segments
     uint8_t accumulator_correction_flag;    // signals accumulator needs correction
+    
+    //backlash_compensation
+    float backlash_deviation;				// desired amount of following error due to backlash
 } stPrepMotor_t;
 
 typedef struct stPrepSingleton {
@@ -460,6 +465,7 @@ stat_t st_set_me(nvObj_t *nv);
 	void st_print_po(nvObj_t *nv);
 	void st_print_pm(nvObj_t *nv);
 	void st_print_pl(nvObj_t *nv);
+	void st_print_bl(nvObj_t *nv);
 	void st_print_mt(nvObj_t *nv);
 	void st_print_me(nvObj_t *nv);
 	void st_print_md(nvObj_t *nv);
@@ -473,6 +479,7 @@ stat_t st_set_me(nvObj_t *nv);
 	#define st_print_po tx_print_stub
 	#define st_print_pm tx_print_stub
 	#define st_print_pl tx_print_stub
+	#define st_print_bl tx_print_stub
 	#define st_print_mt tx_print_stub
 	#define st_print_me tx_print_stub
 	#define st_print_md tx_print_stub
