@@ -28,15 +28,15 @@
  * 		 into a virgin EEPROM, and can be changed using the config commands.
  *		 After initial load the EEPROM values (or changed values) are used.
  *
- *		 System and hardware settings that you shouldn't need to change 
- *		 are in hardware.h  Application settings that also shouldn't need 
+ *		 System and hardware settings that you shouldn't need to change
+ *		 are in hardware.h  Application settings that also shouldn't need
  *		 to be changed are in tinyg.h
  */
 /***********************************************************************/
 /**** Default profile for screw driven machines ************************/
 /***********************************************************************/
 
-// ***> NOTE: The init message must be a single line with no CRs or LFs 
+// ***> NOTE: The init message must be a single line with no CRs or LFs
 #define INIT_MESSAGE "Initializing configs to default settings"
 
 //**** GLOBAL / GENERAL SETTINGS ******************************************************
@@ -76,7 +76,7 @@
 #define STATUS_REPORT_VERBOSITY     SR_FILTERED             // one of: SR_OFF, SR_FILTERED, SR_VERBOSE
 #define STATUS_REPORT_MIN_MS        200                     // milliseconds - enforces a viable minimum
 #define STATUS_REPORT_INTERVAL_MS   250                     // milliseconds - set $SV=0 to disable
-#define STATUS_REPORT_DEFAULTS "line","posx","posy","posz","posa","feed","vel","unit","coor","dist","frmo","momo","stat"
+#define STATUS_REPORT_DEFAULTS "line","posx","posy","posz","posa","feed","vel","unit","coor","dist","admo","frmo","momo","stat"
 // Alternate SRs that report in drawable units
 //#define STATUS_REPORT_DEFAULTS "line","vel","mpox","mpoy","mpoz","mpoa","coor","ofsa","ofsx","ofsy","ofsz","dist","unit","stat","homz","homy","homx","momo"
 
@@ -124,9 +124,9 @@
 #define M4_MOTOR_MAP                AXIS_A				// 1ma
 #define M4_STEP_ANGLE               1.8					// 1sa
 #define M4_TRAVEL_PER_REV           360 				// 1tr		degrees moved per motor rev
-#define M4_MICROSTEPS               8					// 1mi		
-#define M4_POLARITY                 0					// 1po		
-#define M4_POWER_MODE               MOTOR_POWER_MODE	// 1pm		
+#define M4_MICROSTEPS               8					// 1mi
+#define M4_POLARITY                 0					// 1po
+#define M4_POWER_MODE               MOTOR_POWER_MODE	// 1pm
 #define M4_POWER_LEVEL              MOTOR_POWER_LEVEL	// 1mp
 #define M4_BACKLASH					0
 
@@ -141,7 +141,7 @@
 
 #define M6_MOTOR_MAP                AXIS_C
 #define M6_STEP_ANGLE               1.8
-#define M6_TRAVEL_PER_REV           360                 // degrees moved per motor rev	
+#define M6_TRAVEL_PER_REV           360                 // degrees moved per motor rev
 #define M6_MICROSTEPS               8
 #define M6_POLARITY                 0
 #define M6_POWER_MODE               MOTOR_POWER_MODE
@@ -201,8 +201,24 @@
 #define Z_ZERO_BACKOFF              1
 
 // Rotary values are chosen to make the motor react the same as X for testing
+/***************************************************************************************
+ * To calculate the speeds here, in Wolfram Alpha-speak:
+ *
+ *   c=2*pi*r, r=0.609, d=c/360, s=((S*60)/d), S=40 for s
+ *
+ * Change r to A_RADIUS, and S to the desired speed, in mm/s or mm/s/s/s.
+ *
+ * It will return s= as the value you want to enter.
+ *
+ * If the value is over 1 million, the code will divide it by 1 million,
+ * so you have to pre-multiply it by 1000000.0. (The value is in millions, btw.)
+ *
+ * Note that you need these to be floating point values, so always have a .0 at the end!
+ *
+ ***************************************************************************************/
 
 #define A_AXIS_MODE                 AXIS_RADIUS
+#define A_RADIUS                    (M1_TRAVEL_PER_REV/(2*3.14159628))
 #define A_VELOCITY_MAX              ((X_VELOCITY_MAX/M1_TRAVEL_PER_REV)*360) // set to the same speed as X axis
 #define A_FEEDRATE_MAX              A_VELOCITY_MAX
 #define A_TRAVEL_MIN                -1					// min/max the same means infinite, no limit
@@ -210,7 +226,6 @@
 #define A_JERK_MAX                  (X_JERK_MAX*(360/M1_TRAVEL_PER_REV))
 #define A_JERK_HIGH_SPEED           A_JERK_MAX
 #define A_JUNCTION_DEVIATION        JUNCTION_DEVIATION_ABC
-#define A_RADIUS                    (M1_TRAVEL_PER_REV/(2*3.14159628))
 #define A_HOMING_INPUT              0
 #define A_HOMING_DIR                0
 #define A_SEARCH_VELOCITY           600
@@ -219,6 +234,7 @@
 #define A_ZERO_BACKOFF              2
 
 #define B_AXIS_MODE                 AXIS_RADIUS
+#define B_RADIUS                    (M1_TRAVEL_PER_REV/(2*3.14159628))
 #define B_VELOCITY_MAX              ((X_VELOCITY_MAX/M1_TRAVEL_PER_REV)*360)
 #define B_FEEDRATE_MAX              B_VELOCITY_MAX
 #define B_TRAVEL_MIN                -1
@@ -226,7 +242,6 @@
 #define B_JERK_MAX                  (X_JERK_MAX*(360/M1_TRAVEL_PER_REV))
 #define B_JERK_HIGH_SPEED           B_JERK_MAX
 #define B_JUNCTION_DEVIATION        JUNCTION_DEVIATION_ABC
-#define B_RADIUS                    (M1_TRAVEL_PER_REV/(2*3.14159628))
 #define B_HOMING_INPUT              0
 #define B_HOMING_DIR                0
 #define B_SEARCH_VELOCITY           600
@@ -235,6 +250,7 @@
 #define B_ZERO_BACKOFF              2
 
 #define C_AXIS_MODE                 AXIS_RADIUS
+#define C_RADIUS                    (M1_TRAVEL_PER_REV/(2*3.14159628))
 #define C_VELOCITY_MAX              ((X_VELOCITY_MAX/M1_TRAVEL_PER_REV)*360)
 #define C_FEEDRATE_MAX              C_VELOCITY_MAX
 #define C_TRAVEL_MIN                -1
@@ -242,7 +258,6 @@
 #define C_JERK_MAX                  (X_JERK_MAX*(360/M1_TRAVEL_PER_REV))
 #define C_JERK_HIGH_SPEED           C_JERK_MAX
 #define C_JUNCTION_DEVIATION        JUNCTION_DEVIATION_ABC
-#define C_RADIUS                    (M1_TRAVEL_PER_REV/(2*3.14159628))
 #define C_HOMING_INPUT              0
 #define C_HOMING_DIR                0
 #define C_SEARCH_VELOCITY           600
@@ -252,11 +267,11 @@
 
 //*** Input / output settings ***
 
-/*  
+/*
     INPUT_MODE_DISABLED
     INPUT_ACTIVE_LOW    aka NORMALLY_OPEN
     INPUT_ACTIVE_HIGH   aka NORMALLY_CLOSED
-    
+
     INPUT_ACTION_NONE
     INPUT_ACTION_STOP
     INPUT_ACTION_FAST_STOP
