@@ -124,7 +124,8 @@ struct Stepper {
 	{
         if (!_enable.isNull()) {
             if (st_cfg.mot[motor].power_mode != MOTOR_DISABLED) {
-                _enable.clear();
+                //_enable.clear();
+                _enable.set();
                 st_run.mot[motor].power_state = MOTOR_POWER_TIMEOUT_START;
 
                 // if we have a common enable, this is the time to use it...
@@ -136,7 +137,8 @@ struct Stepper {
     void disable()
     {
         if (!_enable.isNull()) {
-            _enable.set();
+            //_enable.set();
+            _enable.clear();
             st_run.mot[motor].power_state = MOTOR_IDLE;
         }
     };

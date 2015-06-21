@@ -76,7 +76,7 @@
 #define STATUS_REPORT_VERBOSITY     SR_FILTERED             // one of: SR_OFF, SR_FILTERED, SR_VERBOSE
 #define STATUS_REPORT_MIN_MS        200                     // milliseconds - enforces a viable minimum
 #define STATUS_REPORT_INTERVAL_MS   250                     // milliseconds - set $SV=0 to disable
-#define STATUS_REPORT_DEFAULTS "line","posx","posy","posz","posa","feed","vel","unit","coor","dist","frmo","momo","stat"
+#define STATUS_REPORT_DEFAULTS "line","posx","posy","posz","posa","feed","vel","unit","coor","dist", "admo", "frmo","momo","stat"
 // Alternate SRs that report in drawable units
 //#define STATUS_REPORT_DEFAULTS "line","vel","mpox","mpoy","mpoz","mpoa","coor","ofsa","ofsx","ofsy","ofsz","dist","unit","stat","homz","homy","homx","momo"
 
@@ -117,14 +117,14 @@
 #define M3_TRAVEL_PER_REV           4.2857
 #define M3_MICROSTEPS               4
 #define M3_POLARITY                 1
-#define M3_POWER_MODE               MOTOR_POWER_MODE
+#define M3_POWER_MODE               MOTOR_ALWAYS_POWERED
 #define M3_POWER_LEVEL              MOTOR_POWER_LEVEL
 #define M3_BACKLASH					0
 
 #define M4_MOTOR_MAP                AXIS_A				// 1ma
 #define M4_STEP_ANGLE               1.8					// 1sa
-#define M4_TRAVEL_PER_REV           360 				// 1tr		degrees moved per motor rev
-#define M4_MICROSTEPS               8					// 1mi		
+#define M4_TRAVEL_PER_REV           4.675324675			// 1tr		degrees moved per motor rev
+#define M4_MICROSTEPS               4					// 1mi		
 #define M4_POLARITY                 0					// 1po		
 #define M4_POWER_MODE               MOTOR_POWER_MODE	// 1pm		
 #define M4_POWER_LEVEL              MOTOR_POWER_LEVEL	// 1mp
@@ -196,21 +196,36 @@
 #define Z_HOMING_INPUT              6
 #define Z_HOMING_DIR                1
 #define Z_SEARCH_VELOCITY           500
-#define Z_LATCH_VELOCITY            100
+#define Z_LATCH_VELOCITY            25.4
 #define Z_LATCH_BACKOFF             6.35
 #define Z_ZERO_BACKOFF              1
 
 // Rotary values are chosen to make the motor react the same as X for testing
+/***************************************************************************************
+ * To calculate the speeds here, in Wolfram Alpha-speak:
+ *
+ *   c=2*pi*r, r=0.609, d=c/360, s=((S*60)/d), S=40 for s
+ *
+ * Change r to A_RADIUS, and S to the desired speed, in mm/s or mm/s/s/s.
+ *
+ * It will return s= as the value you want to enter.
+ *
+ * If the value is over 1 million, the code will divide it by 1 million,
+ * so you have to pre-multiply it by 1000000.0. (The value is in millions, btw.)
+ *
+ * Note that you need these to be floating point values, so always have a .0 at the end!
+ *
+ ***************************************************************************************/
 
 #define A_AXIS_MODE                 AXIS_RADIUS
-#define A_VELOCITY_MAX              ((X_VELOCITY_MAX/M1_TRAVEL_PER_REV)*360) // set to the same speed as X axis
+#define A_VELOCITY_MAX              14400 // set to the same speed as X axis
 #define A_FEEDRATE_MAX              A_VELOCITY_MAX
 #define A_TRAVEL_MIN                -1					// min/max the same means infinite, no limit
 #define A_TRAVEL_MAX                -1
-#define A_JERK_MAX                  (X_JERK_MAX*(360/M1_TRAVEL_PER_REV))
+#define A_JERK_MAX                  508
 #define A_JERK_HIGH_SPEED           A_JERK_MAX
 #define A_JUNCTION_DEVIATION        JUNCTION_DEVIATION_ABC
-#define A_RADIUS                    (M1_TRAVEL_PER_REV/(2*3.14159628))
+#define A_RADIUS                    4.042538969
 #define A_HOMING_INPUT              0
 #define A_HOMING_DIR                0
 #define A_SEARCH_VELOCITY           600
@@ -296,7 +311,7 @@
 #define DI5_FUNCTION                INPUT_FUNCTION_LIMIT
 
 // Zmax
-#define DI6_MODE                    NORMALLY_OPEN
+#define DI6_MODE                    NORMALLY_CLOSED
 #define DI6_ACTION                  INPUT_ACTION_NONE
 #define DI6_FUNCTION                INPUT_FUNCTION_LIMIT
 
