@@ -167,8 +167,8 @@
 #define X_HOMING_DIR                1                   // xhd  0 to search to minimum, 1 to search to maximum
 #define X_SEARCH_VELOCITY           2000					// xsv  move in negative direction
 #define X_LATCH_VELOCITY            100					// xlv  mm/min
-#define X_LATCH_BACKOFF             12.7					// xlb  mm
-#define X_ZERO_BACKOFF              1					// xzb  mm
+#define X_LATCH_BACKOFF             4					// xlb  mm
+#define X_ZERO_BACKOFF              3.5146					// xzb  mm
 
 #define Y_AXIS_MODE                 AXIS_STANDARD
 #define Y_VELOCITY_MAX              5000
@@ -182,8 +182,8 @@
 #define Y_HOMING_DIR                1
 #define Y_SEARCH_VELOCITY           2000
 #define Y_LATCH_VELOCITY            100
-#define Y_LATCH_BACKOFF             12.7
-#define Y_ZERO_BACKOFF              1
+#define Y_LATCH_BACKOFF             4
+#define Y_ZERO_BACKOFF              2.61290
 
 #define Z_AXIS_MODE                 AXIS_STANDARD
 #define Z_VELOCITY_MAX              1400
@@ -196,8 +196,8 @@
 #define Z_HOMING_INPUT              6
 #define Z_HOMING_DIR                1
 #define Z_SEARCH_VELOCITY           500
-#define Z_LATCH_VELOCITY            25.4
-#define Z_LATCH_BACKOFF             6.35
+#define Z_LATCH_VELOCITY            100
+#define Z_LATCH_BACKOFF             1.5
 #define Z_ZERO_BACKOFF              1
 
 // Rotary values are chosen to make the motor react the same as X for testing
